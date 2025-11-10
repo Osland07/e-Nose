@@ -203,7 +203,7 @@ class MainPage(QWidget):
         # Device & Model Control + Environment Group (Right Panel)
         self.controls_environment_group.setStyleSheet("""
             QGroupBox { font-size: 16px; font-weight: bold; color: #1E3A8A; margin-top: 10px; border: 1px solid #D1D5DB; border-radius: 8px; }
-            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 5px 10px; }
+            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 5px 3px; }
         """)
         
         # Upload Model Form Group styling
@@ -374,7 +374,7 @@ class MainPage(QWidget):
         if self.is_connected and self.current_port in get_available_ports(): return
         ports = get_available_ports()
         if not ports:
-            self.handle_connection_status(False, "Hubungkan")
+            self.handle_connection_status(False, "Hubungkan Perangkat")
             return
         self.current_port = ports[0]
         self.serial_worker = SerialWorker(self.current_port)
