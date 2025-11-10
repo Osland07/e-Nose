@@ -33,66 +33,74 @@ class SensorDisplay(QWidget):
     """A widget to display a single sensor reading with an icon, value, and unit."""
     def __init__(self, icon_path: str, unit: str, title: str):
         super().__init__()
-        self.setMinimumWidth(120) # Adjusted width
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        self.setMinimumWidth(110)
+        self.setMaximumWidth(150)
+        
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(2)
 
         # Main container for styling
         container = QWidget()
         container.setObjectName("sensorCard")
         container_layout = QHBoxLayout(container)
+        container_layout.setContentsMargins(4, 4, 4, 4)
+        container_layout.setSpacing(4)
 
-        # Icon
+        # Icon on the left
         icon_label = QLabel()
-        icon_label.setPixmap(QIcon(icon_path).pixmap(28, 28)) # Adjusted icon size
-        icon_label.setFixedSize(28, 28)
+        icon_label.setPixmap(QIcon(icon_path).pixmap(24, 24))
+        icon_label.setFixedSize(24, 24)
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
-        # Value and Unit Layout
+        # Value and Unit Layout on the right
         value_layout = QVBoxLayout()
         value_layout.setSpacing(0)
+        value_layout.setContentsMargins(0, 0, 0, 0)
         
         self.value_label = QLabel("--")
         self.value_label.setObjectName("sensorValue")
+        self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         unit_label = QLabel(unit)
         unit_label.setObjectName("sensorUnit")
+        unit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        value_layout.addWidget(self.value_label, alignment=Qt.AlignmentFlag.AlignLeft)
-        value_layout.addWidget(unit_label, alignment=Qt.AlignmentFlag.AlignLeft)
+        value_layout.addWidget(self.value_label)
+        value_layout.addWidget(unit_label)
 
+        # Add icon and value layout to container
         container_layout.addWidget(icon_label)
-        container_layout.addLayout(value_layout)
-        
-        # Title Label
+        container_layout.addLayout(value_layout, 1)
+
+        # Title Label below
         title_label = QLabel(title)
         title_label.setObjectName("sensorTitle")
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        layout.addWidget(container)
-        layout.addWidget(title_label)
+        main_layout.addWidget(container)
+        main_layout.addWidget(title_label)
 
         self.setStyleSheet("""
             #sensorCard {
                 background-color: #F8FAFC;
                 border: 1px solid #E2E8F0;
-                border-radius: 10px; /* Adjusted border radius */
-                padding: 6px; /* Adjusted padding */
+                border-radius: 6px;
+                padding: 0px;
             }
             #sensorValue {
-                font-size: 20px; /* Adjusted font size */
+                font-size: 18px;
                 font-weight: bold;
                 color: #1E3A8A;
             }
             #sensorUnit {
-                font-size: 12px; /* Adjusted font size */
+                font-size: 10px;
                 color: #64748B;
             }
             #sensorTitle {
-                font-size: 12px; /* Adjusted font size */
+                font-size: 10px;
                 font-weight: 500;
                 color: #334155;
-                margin-top: 4px;
             }
         """)
 
@@ -117,18 +125,22 @@ class MainPage(QWidget):
 
         # --- Right Panel for Sensors ---
         right_panel = QWidget()
-        right_panel.setFixedWidth(180) # Set a fixed width for the right panel
+        right_panel.setFixedWidth(200) # Set a fixed width for the right panel
         right_layout = QVBoxLayout(right_panel)
 
         main_layout.addWidget(left_panel)
         main_layout.addWidget(right_panel)
 
-        # --- Define Widgets ---
-        title = QLabel("e-Nose Halal Food Detection")
+        # --- Device & Model + Environment Container (for the right panel) ---
+        self.controls_environment_group = QGroupBox("Device & Model Control")
+        controls_env_layout = QVBoxLayout(self.controls_environment_group)
         
         # --- Sensor Displays (for the right panel) ---
         self.sensor_group = QGroupBox("Environment")
         sensor_layout = QVBoxLayout(self.sensor_group) # Changed to QVBoxLayout
+        sensor_layout.setContentsMargins(5, 15, 5, 5)  # Increased top margin for spacing
+        self.sensor_group.setMinimumHeight(160)  # Increased minimum height
+        self.sensor_group.setMaximumHeight(220)  # Increased maximum height
         
         base_path = os.path.abspath(os.path.dirname(__file__))
         assets_path = os.path.join(base_path, '..', 'assets')
@@ -138,18 +150,45 @@ class MainPage(QWidget):
         self.pressure_display = SensorDisplay(os.path.join(assets_path, 'pressure.svg'), "hPa", "Pressure")
 
         sensor_layout.addWidget(self.temperature_display)
+        sensor_layout.addSpacing(5)
         sensor_layout.addWidget(self.humidity_display)
+        sensor_layout.addSpacing(5)
         sensor_layout.addWidget(self.pressure_display)
         sensor_layout.addStretch() # Pushes sensors to the top
 
-        # --- Device & Model Status Group (for the left panel) ---
-        self.controls_group = QGroupBox("Device & Model Controls")
-        controls_layout = QGridLayout(self.controls_group)
-        
+        # --- Device & Model Control Group (now contains both controls and environment) ---
         self.status_label = QLabel("Mencari perangkat...")
         self.model_selector = QComboBox()
-        self.upload_button = QPushButton(" Upload Model")
+        self.upload_button = QPushButton("📁 Pilih File")
         self.model_status_label = QLabel("Model: (belum ada)")
+
+        # Upload Model Form Section
+        upload_form_group = QGroupBox("Upload Model")
+        upload_form_layout = QVBoxLayout(upload_form_group)
+        upload_form_layout.setContentsMargins(8, 10, 8, 8)
+        upload_form_layout.setSpacing(6)
+        
+        # Model Selection Row
+        select_label = QLabel("Pilih Model:")
+        select_label.setStyleSheet("font-weight: 600;")
+        upload_form_layout.addWidget(select_label)
+        upload_form_layout.addWidget(self.model_selector)
+        
+        # Upload Button
+        upload_form_layout.addSpacing(2)
+        upload_form_layout.addWidget(self.upload_button)
+        
+        # Status Info
+        upload_form_layout.addSpacing(2)
+        upload_form_layout.addWidget(self.model_status_label)
+
+        controls_env_layout.addSpacing(8)  # Space at top
+        controls_env_layout.addWidget(self.status_label)
+        controls_env_layout.addSpacing(10)
+        controls_env_layout.addWidget(upload_form_group)
+        controls_env_layout.addSpacing(10)
+        controls_env_layout.addWidget(self.sensor_group)
+        controls_env_layout.addStretch()
 
         # Graph Group (for the left panel)
         graph_group = QGroupBox("Grafik Sensor Gas")
@@ -161,37 +200,70 @@ class MainPage(QWidget):
 
         # --- Configure Widgets & Layouts ---
         
-        # Title
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet("font-size: 32px; font-weight: bold; color: #1E3A8A; margin-bottom: 10px;")
-
-        # Sensor Group (Right Panel)
-        self.sensor_group.setStyleSheet("""
+        # Device & Model Control + Environment Group (Right Panel)
+        self.controls_environment_group.setStyleSheet("""
             QGroupBox { font-size: 16px; font-weight: bold; color: #1E3A8A; margin-top: 10px; border: 1px solid #D1D5DB; border-radius: 8px; }
-            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; padding: 5px 10px; }
-        """)
-        right_layout.addWidget(self.sensor_group)
-        right_layout.addStretch()
-
-        # Controls Group (Left Panel)
-        self.controls_group.setStyleSheet("""
-            QGroupBox { font-size: 18px; font-weight: bold; color: #1E3A8A; margin-top: 10px; border: 1px solid #D1D5DB; border-radius: 8px; }
             QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 5px 10px; }
         """)
         
-        self.status_label.setStyleSheet("font-size: 16px; font-weight: bold; color: orange;")
+        # Upload Model Form Group styling
+        upload_form_group.setStyleSheet("""
+            QGroupBox { 
+                font-size: 13px; 
+                font-weight: bold; 
+                color: #1E3A8A; 
+                margin-top: 8px; 
+                border: 2px solid #3B82F6; 
+                border-radius: 6px;
+                background-color: #F0F9FF;
+            }
+            QGroupBox::title { 
+                subcontrol-origin: margin; 
+                subcontrol-position: top left; 
+                padding: 3px 8px; 
+            }
+        """)
         
-        upload_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
-        self.upload_button.setIcon(upload_icon)
-        self.upload_button.setStyleSheet("font-size: 14px; padding: 8px; text-align: left;")
+        # Sensor Group (nested inside controls_environment_group)
+        self.sensor_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #1E3A8A; margin-top: 8px; border: 1px solid #E2E8F0; border-radius: 6px; }
+            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top center; padding: 3px 8px; }
+        """)
         
-        self.model_selector.setStyleSheet("font-size: 14px; padding: 5px;")
-        self.model_status_label.setStyleSheet("font-size: 14px; color: gray; font-style: italic;")
-
-        controls_layout.addWidget(self.status_label, 0, 0, 1, 2)
-        controls_layout.addWidget(self.model_selector, 1, 0)
-        controls_layout.addWidget(self.upload_button, 1, 1)
-        controls_layout.addWidget(self.model_status_label, 2, 0, 1, 2)
+        self.status_label.setStyleSheet("font-size: 10px; font-weight: bold; color: orange;")
+        
+        self.upload_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3B82F6;
+                color: white;
+                font-size: 11px;
+                font-weight: 600;
+                padding: 8px 12px;
+                border: none;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #2563EB;
+            }
+            QPushButton:pressed {
+                background-color: #1D4ED8;
+            }
+        """)
+        self.upload_button.setMinimumHeight(32)
+        
+        self.model_selector.setStyleSheet("""
+            QComboBox {
+                font-size: 10px;
+                padding: 6px;
+                border: 1px solid #D1D5DB;
+                border-radius: 4px;
+                background-color: white;
+            }
+        """)
+        self.model_status_label.setStyleSheet("font-size: 9px; color: #64748B; font-style: italic;")
+        
+        right_layout.addWidget(self.controls_environment_group)
+        right_layout.addStretch()
 
         # Graph Group (Left Panel)
         graph_group.setStyleSheet("""
@@ -224,8 +296,6 @@ class MainPage(QWidget):
         self.start_button.setEnabled(False)
 
         # --- Add Widgets to Left Panel Layout ---
-        left_layout.addWidget(title)
-        left_layout.addWidget(self.controls_group)
         left_layout.addWidget(graph_group)
         left_layout.addWidget(self.result_label)
         left_layout.addStretch()
@@ -304,7 +374,7 @@ class MainPage(QWidget):
         if self.is_connected and self.current_port in get_available_ports(): return
         ports = get_available_ports()
         if not ports:
-            self.handle_connection_status(False, "Perangkat tidak terhubung.")
+            self.handle_connection_status(False, "Hubungkan")
             return
         self.current_port = ports[0]
         self.serial_worker = SerialWorker(self.current_port)
