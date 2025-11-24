@@ -26,61 +26,46 @@ class HistoryPage(QWidget):
     def __init__(self):
         super().__init__()
 
-        # --- State ---
         self.records_per_page = 15
         self.current_page = 1
         self.total_pages = 1
         
         self._init_ui()
-        self.populate_table()
+        # The first populate_table is now triggered by apply_filters_and_search
+        # to ensure a consistent load.
+        self.apply_filters_and_search()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
         
-        # --- Top bar with Title and Export ---
         top_bar_layout = QHBoxLayout()
         title = QLabel("Detection History")
         title.setStyleSheet("font-size: 28px; font-weight: bold; color: #1E3A8A;")
         
-        export_all_button = QPushButton("📁 Export All to CSV")
-        export_all_button.setFixedSize(180, 40)
-        export_all_button.setStyleSheet("""
-            QPushButton { background-color: #10B981; color: white; font-size: 14px; font-weight: 600; padding: 8px 12px; border: none; border-radius: 6px; }
-            QPushButton:hover { background-color: #059669; }
-        """)
-        export_all_button.clicked.connect(self.export_all_to_csv)
-
         top_bar_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignLeft)
         top_bar_layout.addStretch()
-        top_bar_layout.addWidget(export_all_button, alignment=Qt.AlignmentFlag.AlignRight)
-        
         layout.addLayout(top_bar_layout)
         
-        # --- Filter and Search Controls ---
         controls_group = QGroupBox("Filter and Search")
         controls_layout = QHBoxLayout(controls_group)
         
         self.filter_combo = QComboBox()
         self.filter_combo.addItems(["All", "Terdeteksi Daging Babi", "Tidak Terdeteksi"])
+        self.filter_combo.currentTextChanged.connect(self.apply_filters_and_search)
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search by ID, date, result...")
-        self.search_input.returnPressed.connect(self.apply_filters_and_search)
-
-        apply_button = QPushButton("Apply")
-        apply_button.clicked.connect(self.apply_filters_and_search)
+        self.search_input.textChanged.connect(self.apply_filters_and_search)
 
         controls_layout.addWidget(QLabel("Filter by Result:"))
         controls_layout.addWidget(self.filter_combo)
         controls_layout.addSpacing(20)
         controls_layout.addWidget(QLabel("Search:"))
-        controls_layout.addWidget(self.search_input, 1) # Stretch search input
-        controls_layout.addWidget(apply_button)
+        controls_layout.addWidget(self.search_input, 1)
         
         layout.addWidget(controls_group)
         layout.addSpacing(10)
 
-        # --- History Table ---
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(4)
         self.history_table.setHorizontalHeaderLabels(["No", "Date and Time", "Result", "Action"])
@@ -103,7 +88,6 @@ class HistoryPage(QWidget):
 
         layout.addWidget(self.history_table)
 
-        # --- Pagination Controls ---
         pagination_layout = QHBoxLayout()
         self.prev_button = QPushButton("← Previous")
         self.prev_button.clicked.connect(self.prev_page)
@@ -144,6 +128,7 @@ class HistoryPage(QWidget):
         records = get_paginated_records(conn, offset, self.records_per_page, filter_text, search_query)
         conn.close()
 
+        self.history_table.setRowCount(0) # Clear table before populating
         self.history_table.setRowCount(len(records))
         for i, record in enumerate(records):
             record_id = record[0]
@@ -180,7 +165,7 @@ class HistoryPage(QWidget):
             actions_layout.addStretch()
 
             self.history_table.setCellWidget(i, 3, actions_widget)
-            self.history_table.setRowHeight(i, 60) # Increased row height to accommodate buttons
+            self.history_table.setRowHeight(i, 40) # Set row height for icons
 
             for j in range(3):
                 self.history_table.item(i, j).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -216,33 +201,6 @@ class HistoryPage(QWidget):
         """)
         button.setFixedSize(30, 30)
         
-    def export_all_to_csv(self):
-        filter_text = self.filter_combo.currentText()
-        search_query = self.search_input.text()
-        
-        conn = create_connection()
-        if not conn:
-            QMessageBox.warning(self, "Error Database", "Tidak dapat terhubung ke database untuk mengekspor data.")
-            return
-            
-        # Get all records that match the current filter/search for export
-        records = get_all_records(conn, filter_text, search_query)
-        conn.close()
-
-        if not records:
-            QMessageBox.information(self, "Tidak Ada Data", "Tidak ada data (sesuai filter) untuk diekspor.")
-            return
-            
-        path, _ = QFileDialog.getSaveFileName(self, "Simpan File CSV", "history_export.csv", "CSV Files (*.csv)")
-
-        if path:
-            try:
-                df = pd.DataFrame(records, columns=['ID', 'Timestamp', 'Result', 'RawData'])
-                df.to_csv(path, index=False, encoding='utf-8')
-                QMessageBox.information(self, "Ekspor Berhasil", f"Data berhasil diekspor ke {path}")
-            except Exception as e:
-                QMessageBox.critical(self, "Error Ekspor", f"Terjadi kesalahan saat mengekspor data: {e}")
-
     def show_record_detail(self, record_id):
         try:
             detail_dialog = DetailPage(record_id, self)
@@ -292,6 +250,7 @@ class HistoryPage(QWidget):
 
         if path:
             try:
+                # Use pandas to write the single record
                 df = pd.DataFrame([record], columns=['ID', 'Timestamp', 'Result', 'RawData'])
                 df.to_csv(path, index=False, encoding='utf-8')
                 QMessageBox.information(self, "Ekspor Berhasil", f"Record {record_id} berhasil diekspor ke {path}")
