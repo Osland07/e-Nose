@@ -72,7 +72,7 @@ class HistoryPage(QWidget):
         self.history_table.setStyleSheet("""
             QTableWidget { font-size: 14px; border: 1px solid #D1D5DB; border-radius: 8px; gridline-color: #E5E7EB; }
             QHeaderView::section { background-color: #F3F4F6; padding: 10px; border: none; font-weight: bold; font-size: 14px; color: #374151; }
-            QTableWidget::item { padding: 10px; color: #111827; }
+            QTableWidget::item { padding: 10px; color: #111827; min-height: 50px; }
             QTableWidget::alternating-row-color { background-color: #F9FAFB; }
         """)
         self.history_table.setAlternatingRowColors(True)
