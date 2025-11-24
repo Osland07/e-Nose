@@ -1,4 +1,7 @@
-PyQt6
-pyserial
-scikit-learn
-pyqtgraph
+PyQt6==6.6.1
+pyserial==3.5
+scikit-learn==1.2.2
+pyqtgraph==0.13.3
+pandas==1.5.3
+PyQt6-Qt6==6.6.2
+numpy==1.24.4

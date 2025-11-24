@@ -119,7 +119,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         # Ensure the serial worker thread is stopped when the application closes
-        if self.main_page.serial_worker and self.main_page.serial_worker.isRunning():
-            self.main_page.serial_worker.stop()
+        if self.main_page.device_control.serial_worker and self.main_page.device_control.serial_worker.isRunning():
+            self.main_page.device_control.serial_worker.stop()
         event.accept()
 
