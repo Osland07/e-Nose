@@ -5,9 +5,9 @@ import pandas as pd
 from ml.feature_extractor import extract_features
 from sklearn.preprocessing import LabelEncoder
 
-MODEL_DIR = "model"
-
 class Predictor:
+    MODEL_DIR = "model"
+
     def __init__(self):
         self.model = None
         self.scaler = None
@@ -22,7 +22,7 @@ class Predictor:
         Loads a trained model, its scaler, and feature columns from a .joblib file.
         The file is expected to contain a dictionary with 'model', 'scaler', and 'columns' keys.
         """
-        model_path = os.path.join(MODEL_DIR, model_filename)
+        model_path = os.path.join(self.MODEL_DIR, model_filename)
         if not os.path.exists(model_path):
             print(f"Error: Model file not found at {model_path}")
             self.model = None
@@ -117,10 +117,10 @@ class Predictor:
     @staticmethod
     def get_available_models():
         """Lists all .joblib files in the MODEL_DIR directory."""
-        if not os.path.exists(MODEL_DIR):
-            os.makedirs(MODEL_DIR)
+        if not os.path.exists(Predictor.MODEL_DIR):
+            os.makedirs(Predictor.MODEL_DIR)
             return []
         
-        models = [f for f in os.listdir(MODEL_DIR) if f.endswith('.joblib')]
+        models = [f for f in os.listdir(Predictor.MODEL_DIR) if f.endswith('.joblib')]
         return models
 

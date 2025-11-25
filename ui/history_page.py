@@ -16,10 +16,11 @@ from PyQt6.QtWidgets import (
     QGroupBox
 )
 from PyQt6.QtCore import Qt
-import pandas as pd
+from PyQt6.QtCore import Qt
 import math
+import csv
 
-from database.database import create_connection, get_all_records, get_record_by_id, delete_record_by_id, get_paginated_records, get_record_count
+from database.database import create_connection, get_record_by_id, delete_record_by_id, get_paginated_records, get_record_count, get_distinct_result_types
 from .detail_page import DetailPage
 
 class HistoryPage(QWidget):
@@ -29,11 +30,18 @@ class HistoryPage(QWidget):
         self.records_per_page = 15
         self.current_page = 1
         self.total_pages = 1
+        self.initial_load_done = False
         
         self._init_ui()
-        # The first populate_table is now triggered by apply_filters_and_search
-        # to ensure a consistent load.
-        self.apply_filters_and_search()
+        # Initial population is now handled by showEvent to prevent sizing bugs
+        
+    def showEvent(self, event):
+        """Override showEvent to populate the table on first show."""
+        if not self.initial_load_done:
+            self._populate_filter_combo() # Populate filters on first show
+            self.apply_filters_and_search()
+            self.initial_load_done = True
+        super().showEvent(event)
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -50,7 +58,6 @@ class HistoryPage(QWidget):
         controls_layout = QHBoxLayout(controls_group)
         
         self.filter_combo = QComboBox()
-        self.filter_combo.addItems(["All", "Terdeteksi Daging Babi", "Tidak Terdeteksi"])
         self.filter_combo.currentTextChanged.connect(self.apply_filters_and_search)
         
         self.search_input = QLineEdit()
@@ -72,12 +79,13 @@ class HistoryPage(QWidget):
         self.history_table.setStyleSheet("""
             QTableWidget { font-size: 14px; border: 1px solid #D1D5DB; border-radius: 8px; gridline-color: #E5E7EB; }
             QHeaderView::section { background-color: #F3F4F6; padding: 10px; border: none; font-weight: bold; font-size: 14px; color: #374151; }
-            QTableWidget::item { padding: 10px; color: #111827; min-height: 50px; }
+            QTableWidget::item { padding: 10px; color: #111827; }
             QTableWidget::alternating-row-color { background-color: #F9FAFB; }
         """)
         self.history_table.setAlternatingRowColors(True)
         self.history_table.setShowGrid(False)
         self.history_table.verticalHeader().setVisible(False)
+        self.history_table.verticalHeader().setDefaultSectionSize(50) # Increased default row height to 50
         
         header = self.history_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -102,6 +110,29 @@ class HistoryPage(QWidget):
         pagination_layout.addStretch()
 
         layout.addLayout(pagination_layout)
+
+    def _populate_filter_combo(self):
+        conn = create_connection()
+        if conn:
+            try:
+                # Block signals to prevent triggering a refresh while populating
+                self.filter_combo.blockSignals(True)
+                
+                current_selection = self.filter_combo.currentText()
+                results = get_distinct_result_types(conn)
+                
+                self.filter_combo.clear()
+                self.filter_combo.addItem("All")
+                self.filter_combo.addItems(results)
+                
+                # Restore previous selection if it still exists
+                index = self.filter_combo.findText(current_selection)
+                if index != -1:
+                    self.filter_combo.setCurrentIndex(index)
+
+                self.filter_combo.blockSignals(False)
+            finally:
+                conn.close()
 
     def apply_filters_and_search(self):
         self.current_page = 1
@@ -138,6 +169,7 @@ class HistoryPage(QWidget):
             self.history_table.setItem(i, 2, QTableWidgetItem(record[2]))
             
             actions_widget = QWidget()
+            actions_widget.setFixedHeight(40)
             actions_layout = QHBoxLayout(actions_widget)
             actions_layout.setContentsMargins(0, 0, 0, 0)
             actions_layout.setSpacing(5)
@@ -165,7 +197,6 @@ class HistoryPage(QWidget):
             actions_layout.addStretch()
 
             self.history_table.setCellWidget(i, 3, actions_widget)
-            self.history_table.setRowHeight(i, 40) # Set row height for icons
 
             for j in range(3):
                 self.history_table.item(i, j).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -250,9 +281,10 @@ class HistoryPage(QWidget):
 
         if path:
             try:
-                # Use pandas to write the single record
-                df = pd.DataFrame([record], columns=['ID', 'Timestamp', 'Result', 'RawData'])
-                df.to_csv(path, index=False, encoding='utf-8')
+                with open(path, 'w', newline='', encoding='utf-8') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(['ID', 'Timestamp', 'Result', 'RawData'])
+                    writer.writerow(record)
                 QMessageBox.information(self, "Ekspor Berhasil", f"Record {record_id} berhasil diekspor ke {path}")
             except Exception as e:
                 QMessageBox.critical(self, "Error Ekspor", f"Terjadi kesalahan saat mengekspor record: {e}")

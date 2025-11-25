@@ -12,7 +12,7 @@ from .components.graph_widget import GraphWidget, NUM_GRAPH_SENSORS
 from .components.result_widget import ResultWidget
 
 # --- Configuration ---
-TOTAL_EXPECTED_VALUES = 10
+TOTAL_EXPECTED_VALUES = 11
 # DETECTION_DURATION_MS = 15000 # This is now user-configurable
 
 class MainPage(QWidget):
@@ -109,9 +109,11 @@ class MainPage(QWidget):
         self.update_start_button_state()
 
     def on_data_received(self, data_string):
+        print(f"DEBUG: Data string received: '{data_string}'") # Re-added for debugging
         try:
             sensor_values = [float(x.strip()) for x in data_string.split(',')]
             if len(sensor_values) != TOTAL_EXPECTED_VALUES:
+                print(f"DEBUG: Incorrect number of sensor values. Expected {TOTAL_EXPECTED_VALUES}, got {len(sensor_values)} for '{data_string}'") # Re-added for debugging
                 return
 
             graph_values = sensor_values[:NUM_GRAPH_SENSORS]
@@ -123,7 +125,8 @@ class MainPage(QWidget):
             if self.is_detecting:
                 self.data_buffer.append(data_string)
 
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            print(f"DEBUG: Parsing error in on_data_received for '{data_string}': {e}") # Re-added for debugging
             pass 
 
     def toggle_detection(self):

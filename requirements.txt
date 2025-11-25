@@ -1,7 +1,9 @@
 PyQt6==6.6.1
 pyserial==3.5
-scikit-learn==1.2.2
+scikit-learn==1.7.2
 pyqtgraph==0.13.3
-pandas==1.5.3
+pandas==2.3.3
 PyQt6-Qt6==6.6.2
-numpy==1.24.4
+numpy==2.3.5
+seaborn
+matplotlib

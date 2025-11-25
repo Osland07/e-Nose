@@ -1,4 +1,5 @@
 from PyQt6.QtWidgets import QGroupBox, QVBoxLayout
+from PyQt6.QtCore import Qt
 import os
 from .sensor_display import SensorDisplay
 
@@ -17,11 +18,11 @@ class EnvironmentWidget(QGroupBox):
         self.humidity_display = SensorDisplay(os.path.join(assets_path, 'humidity.svg'), "%", "Humidity")
         self.pressure_display = SensorDisplay(os.path.join(assets_path, 'pressure.svg'), "hPa", "Pressure")
 
-        layout.addWidget(self.temperature_display)
+        layout.addWidget(self.temperature_display, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(5)
-        layout.addWidget(self.humidity_display)
+        layout.addWidget(self.humidity_display, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addSpacing(5)
-        layout.addWidget(self.pressure_display)
+        layout.addWidget(self.pressure_display, alignment=Qt.AlignmentFlag.AlignCenter)
         layout.addStretch()
 
         self.setStyleSheet("""

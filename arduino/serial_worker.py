@@ -15,27 +15,50 @@ class SerialWorker(QThread):
         self.running = True
 
     def run(self):
+        print(f"DEBUG (SerialWorker): SerialWorker thread started for port {self.port}")
         try:
-            self.ser = serial.Serial(self.port, self.baud_rate, timeout=1)
+            self.ser = serial.Serial(self.port, self.baud_rate, timeout=5)
             self.connection_status.emit(True)
+            print(f"DEBUG (SerialWorker): Successfully opened serial port {self.port}")
             while self.running:
-                if self.ser.in_waiting > 0:
-                    data = self.ser.readline().decode('utf-8').strip()
+                # print(f"DEBUG (SerialWorker): Loop active. Attempting to read line...")
+                raw_data = self.ser.readline()
+                # print(f"DEBUG (SerialWorker): Raw data read: {raw_data!r}") # Too verbose in loop, uncomment if needed
+
+                if not raw_data: # If readline returns empty bytes (timeout), just continue
+                    continue
+
+                try:
+                    data = raw_data.decode('utf-8').strip()
                     if data:
+                        # Check if the data starts with a number, if not, it might be garbage
+                        if not data[0].isdigit() and not (data[0] == '-' and len(data) > 1 and data[1].isdigit()): # Handle negative numbers
+                            print(f"DEBUG (SerialWorker): Discarding non-numeric start data: '{data}' (raw: {raw_data!r})")
+                            continue
+
+                        print(f"DEBUG (SerialWorker): Decoded and stripped data: '{data}'")
                         self.data_received.emit(data)
-                self.msleep(10) # Small delay to prevent busy-waiting
+                except UnicodeDecodeError as e:
+                    print(f"DEBUG (SerialWorker): UnicodeDecodeError for raw data: {raw_data!r} - {e}. Discarding.")
+                except Exception as e:
+                    print(f"DEBUG (SerialWorker): Unexpected error during data processing: {e}. Raw data: {raw_data!r}")
         except serial.SerialException as e:
+            print(f"DEBUG (SerialWorker): Serial Error in run(): {e}")
             self.error_occurred.emit(f"Serial Error: {e}")
             self.connection_status.emit(False)
         except Exception as e:
+            print(f"DEBUG (SerialWorker): Unexpected error in run(): {e}")
             self.error_occurred.emit(f"An unexpected error occurred: {e}")
             self.connection_status.emit(False)
         finally:
+            print(f"DEBUG (SerialWorker): SerialWorker thread exiting for port {self.port}")
             if self.ser and self.ser.is_open:
                 self.ser.close()
-            self.connection_status.emit(False)
+                print(f"DEBUG (SerialWorker): Serial port {self.port} closed.")
+            self.connection_status.emit(False) # This always emits False on exit
 
     def stop(self):
+        print(f"DEBUG (SerialWorker): Stop requested for {self.port}")
         self.running = False
         self.wait() # Wait for the thread to finish
 

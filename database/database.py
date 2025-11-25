@@ -19,7 +19,8 @@ def create_table(conn):
         sql_create_history_table = """ CREATE TABLE IF NOT EXISTS history (
                                         id integer PRIMARY KEY,
                                         timestamp text NOT NULL,
-                                        result text NOT NULL
+                                        result text NOT NULL,
+                                        raw_data TEXT
                                     ); """
         c = conn.cursor()
         c.execute(sql_create_history_table)
@@ -42,7 +43,7 @@ def add_detection_record(conn, timestamp, result, raw_data_str):
     conn.commit()
     return cur.lastrowid
 
-def get_all_records(conn, filter_text=None, search_query=None):
+def get_all_records(conn, filter_text=None, search_query=None, sort_column="timestamp", sort_order="DESC"):
     """
     Query all rows in the history table that match the filter and search criteria.
     """
@@ -63,7 +64,14 @@ def get_all_records(conn, filter_text=None, search_query=None):
     if conditions:
         base_query += " WHERE " + " AND ".join(conditions)
     
-    base_query += " ORDER BY timestamp DESC"
+    allowed_sort_columns = ["id", "timestamp", "result"]
+    if sort_column not in allowed_sort_columns:
+        sort_column = "timestamp"
+    
+    if sort_order.upper() not in ["ASC", "DESC"]:
+        sort_order = "DESC"
+
+    base_query += f" ORDER BY {sort_column} {sort_order}"
 
     cur.execute(base_query, tuple(params))
     rows = cur.fetchall()
@@ -94,9 +102,9 @@ def delete_record_by_id(conn, record_id):
     conn.commit()
     return cur.rowcount
 
-def get_paginated_records(conn, offset, limit, filter_text=None, search_query=None):
+def get_paginated_records(conn, offset, limit, filter_text=None, search_query=None, sort_column="timestamp", sort_order="DESC"):
     """
-    Query records in the history table with pagination, filtering, and searching.
+    Query records in the history table with pagination, filtering, searching, and sorting.
     """
     cur = conn.cursor()
     
@@ -115,7 +123,14 @@ def get_paginated_records(conn, offset, limit, filter_text=None, search_query=No
     if conditions:
         base_query += " WHERE " + " AND ".join(conditions)
     
-    base_query += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+    allowed_sort_columns = ["id", "timestamp", "result"]
+    if sort_column not in allowed_sort_columns:
+        sort_column = "timestamp"
+    
+    if sort_order.upper() not in ["ASC", "DESC"]:
+        sort_order = "DESC"
+
+    base_query += f" ORDER BY {sort_column} {sort_order} LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
     cur.execute(base_query, tuple(params))
@@ -147,14 +162,29 @@ def get_record_count(conn, filter_text=None, search_query=None):
     count = cur.fetchone()[0]
     return count
 
+def get_distinct_result_types(conn):
+    """
+    Get all unique base result strings from the history table.
+    e.g., "Terdeteksi Daging Babi" from "Terdeteksi Daging Babi (99.5%)"
+    """
+    cur = conn.cursor()
+    cur.execute("SELECT DISTINCT result FROM history")
+    rows = cur.fetchall()
+    
+    unique_results = set()
+    for row in rows:
+        result_str = row[0]
+        base_result = result_str.split(' (')[0].strip()
+        unique_results.add(base_result)
+        
+    return sorted(list(unique_results))
+
 def initialize_database():
     """Create and initialize the database, table, and migrate schema if needed."""
     conn = create_connection()
     if conn is not None:
-        # Ensure the table exists
         create_table(conn)
         
-        # Check and add the raw_data column if it doesn't exist
         try:
             cursor = conn.cursor()
             cursor.execute("PRAGMA table_info(history)")
@@ -169,4 +199,3 @@ def initialize_database():
             conn.close()
     else:
         print("Error! cannot create the database connection.")
-

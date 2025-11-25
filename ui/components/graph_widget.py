@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QGroupBox, QVBoxLayout
 import pyqtgraph as pg
 
 # --- Configuration ---
-NUM_GRAPH_SENSORS = 7
+NUM_GRAPH_SENSORS = 8
 MAX_DATA_POINTS = 200
 
 class GraphWidget(QGroupBox):
@@ -44,8 +44,8 @@ class GraphWidget(QGroupBox):
         self.graph_widget.showGrid(x=True, y=True)
 
     def _setup_graph_lines(self):
-        sensor_names = ["MQ-2", "MQ-3", "MQ-4", "MQ-6", "MQ-7", "MQ-8", "MQ-135"]
-        colors = ['#E53935', '#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#8E24AA', '#00897B']
+        sensor_names = ["MQ-2", "MQ-3", "MQ-4", "MQ-6", "MQ-7", "MQ-8", "MQ-135", "QCM"]
+        colors = ['#E53935', '#1E88E5', '#43A047', '#FDD835', '#FB8C00', '#8E24AA', '#00897B', '#FF00FF'] # Added an eighth color
         for i in range(NUM_GRAPH_SENSORS):
             pen = pg.mkPen(color=colors[i % len(colors)], width=2)
             self.plot_lines.append(self.graph_widget.plot([0], [0], pen=pen, name=sensor_names[i]))
