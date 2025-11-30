@@ -145,7 +145,8 @@ class TrainingWorker(QThread):
             
         except Exception as e:
             import traceback
-            self.log_console.append(traceback.format_exc())
+            error_msg = traceback.format_exc()
+            self.log_signal.emit(f"❌ TERJADI ERROR:\n{error_msg}") # Kirim sinyal, jangan akses GUI langsung
             self.finished_signal.emit(False, str(e))
 
 

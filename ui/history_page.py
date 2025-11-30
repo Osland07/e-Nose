@@ -151,11 +151,9 @@ class HistoryPage(QWidget):
 
         conn = create_connection()
         if not conn:
-            QMessageBox.warning(self, "Database Error", "Gagal terhubung ke database.")
             return
 
         try:
-            # Hitung total halaman
             total_records = get_record_count(conn, filter_text, search_query)
             self.total_pages = math.ceil(total_records / self.records_per_page) if total_records > 0 else 1
             
@@ -163,48 +161,51 @@ class HistoryPage(QWidget):
             if self.current_page < 1: self.current_page = 1
 
             offset = (self.current_page - 1) * self.records_per_page
-            
-            # Ambil data halaman ini
             records = get_paginated_records(conn, offset, self.records_per_page, filter_text, search_query)
             
-            self.history_table.setRowCount(0) # Reset tabel
+            self.history_table.setRowCount(0)
             
-            if records:
-                self.history_table.setRowCount(len(records))
-                for i, record in enumerate(records):
-                    # record: (id, timestamp, result, raw_data)
-                    record_id = record[0]
-                    timestamp = record[1]
-                    result = record[2]
-                    
-                    # Kolom 1: ID
-                    self.history_table.setItem(i, 0, QTableWidgetItem(str(record_id)))
-                    
-                    # Kolom 2: Waktu
-                    self.history_table.setItem(i, 1, QTableWidgetItem(str(timestamp)))
-                    
-                    # Kolom 3: Hasil (Warna-warni dikit biar cantik)
-                    item_result = QTableWidgetItem(str(result))
-                    if "Terdeteksi" in str(result):
-                        item_result.setForeground(Qt.GlobalColor.red)
-                    else:
-                        item_result.setForeground(Qt.GlobalColor.darkGreen)
-                    item_result.setFont(self._get_bold_font())
-                    self.history_table.setItem(i, 2, item_result)
-                    
-                    # Kolom 4: Aksi (Tombol)
-                    self._create_action_buttons(i, record_id)
-                    
-                    # Alignment Tengah
-                    for j in range(3):
-                        if self.history_table.item(i, j):
-                            self.history_table.item(i, j).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            
+            if not records:
+                # Tampilkan pesan kosong di baris pertama jika mau, atau biarkan kosong
+                return
+
+            self.history_table.setRowCount(len(records))
+            for i, record in enumerate(records):
+                record_id = record[0]
+                timestamp = record[1]
+                result = record[2]
+                
+                # ID
+                self.history_table.setItem(i, 0, QTableWidgetItem(str(record_id)))
+                
+                # Waktu
+                self.history_table.setItem(i, 1, QTableWidgetItem(str(timestamp)))
+                
+                # Hasil
+                item_res = QTableWidgetItem(str(result))
+                if "Terdeteksi" in str(result):
+                    item_res.setForeground(Qt.GlobalColor.red)
+                else:
+                    item_res.setForeground(Qt.GlobalColor.darkGreen)
+                
+                font = QFont()
+                font.setBold(True)
+                item_res.setFont(font)
+                
+                self.history_table.setItem(i, 2, item_res)
+                
+                # Aksi
+                self._create_action_buttons(i, record_id)
+                
+                # Align Center
+                for c in range(3):
+                    item = self.history_table.item(i, c)
+                    if item: item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+
             self.update_pagination_ui()
             
         except Exception as e:
-            print(f"Error populating table: {e}")
-            QMessageBox.critical(self, "Error", f"Gagal memuat data: {e}")
+            print(f"Error loading history: {e}")
         finally:
             conn.close()
 

@@ -12,7 +12,9 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QHBoxLayout,
     QFrame,
-    QDialog # <-- Tambahkan ini
+    QDialog,
+    QCheckBox, # <-- Tambahan
+    QScrollArea # <-- Tambahan
 )
 from PyQt6.QtCore import pyqtSignal, QObject, QThread, Qt
 from ml.predictor import Predictor

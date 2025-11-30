@@ -6,8 +6,8 @@ import random
 # --- KONFIGURASI ---
 BASE_DIR = "sample_data"
 CLASSES = {
-    "Terdeteksi Biomarker": {"base_val": 800, "count": 50}, # Nilai Tinggi
-    "Tidak Terdeteksi":     {"base_val": 30,  "count": 50}  # Nilai Rendah
+    "Terdeteksi Biomarker": {"base_val": 800, "count": 500}, # Nilai Tinggi (Banyakin jadi 500)
+    "Tidak Terdeteksi":     {"base_val": 30,  "count": 500}  # Nilai Rendah (Banyakin jadi 500)
 }
 SENSORS = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM', 'Temp', 'Hum', 'Pres']
 

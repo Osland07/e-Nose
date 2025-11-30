@@ -10,80 +10,83 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from ml.feature_extractor import extract_features
 
-# ... (kode atas tetap sama) ...
+# --- KONFIGURASI PATH ---
+BASE_DATA_PATH = 'sample_data'
+MODEL_DIR = "model"
 
-# Scale Data
+if not os.path.exists(MODEL_DIR):
+    os.makedirs(MODEL_DIR)
+
+print("--- TRAINING REAL DATA (MULTI-MODEL) ---")
+
+# 1. LOAD DATA OTOMATIS (Auto-Detect Folder)
+all_features = []
+all_labels = []
+
+if not os.path.exists(BASE_DATA_PATH):
+    print(f"❌ Error: Folder '{BASE_DATA_PATH}' tidak ditemukan!")
+    exit()
+
+# Scan subfolder
+subfolders = [f.path for f in os.scandir(BASE_DATA_PATH) if f.is_dir()]
+print(f"🔎 Ditemukan {len(subfolders)} Kelas Label.")
+
+for folder_path in subfolders:
+    label_name = os.path.basename(folder_path)
+    csv_files = glob.glob(os.path.join(folder_path, "*.csv"))
+    print(f"   📂 {label_name}: {len(csv_files)} file")
+    
+    for fpath in csv_files:
+        try:
+            df = pd.read_csv(fpath, sep=';', decimal=',')
+            # Validasi kolom
+            if df.shape[1] < 8: continue
+            
+            feats = extract_features(df)
+            all_features.append(feats)
+            all_labels.append(label_name)
+        except: pass
+
+if not all_features:
+    print("❌ Tidak ada data valid!")
+    exit()
+
+# 2. PREPROCESSING
+print("\n⚙️ Memproses Data...")
+X_df = pd.DataFrame(all_features).fillna(0)
+le = LabelEncoder()
+y = le.fit_transform(all_labels)
+
+print(f"   Mapping Label: {dict(zip(le.classes_, le.transform(le.classes_)))}")
+
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X_df)
 feature_columns = X_df.columns.tolist()
 
-# SAFETY CHECK: Pastikan data tidak kosong/nol semua
-if X_scaled.shape[0] == 0:
-    print("❌ FATAL ERROR: Tidak ada data features yang berhasil diekstrak.")
-    exit()
-
-print(f"\n📊 Statistik Data:")
-print(f"   - Total Sampel: {len(X_scaled)}")
-print(f"   - Jumlah Fitur per Sampel: {X_scaled.shape[1]}")
-print(f"   - Sebaran Kelas: {dict(pd.Series(y).value_counts())}")
-print(f"     (0 = {le.inverse_transform([0])[0]}, 1 = {le.inverse_transform([1])[0]})")
-
-# Split Data (80% Latih, 20% Uji)
+# Split
 X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42, stratify=y)
 
 # 3. TRAINING LOOP
 models_to_train = [
-    {
-        "name": "REAL_SVM.joblib",
-        "model": SVC(kernel='rbf', probability=True)
-    },
-    {
-        "name": "REAL_RANDOM_FOREST.joblib",
-        "model": RandomForestClassifier(n_estimators=100, random_state=42)
-    },
-    {
-        "name": "REAL_KNN.joblib",
-        "model": KNeighborsClassifier(n_neighbors=3)
-    },
-    {
-        "name": "REAL_NEURAL_NET.joblib",
-        "model": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=1000)
-    }
+    {"name": "REAL_SVM.joblib", "model": SVC(kernel='rbf', probability=True)},
+    {"name": "REAL_RANDOM_FOREST.joblib", "model": RandomForestClassifier(n_estimators=100)},
+    {"name": "REAL_KNN.joblib", "model": KNeighborsClassifier(n_neighbors=3)},
+    {"name": "REAL_NEURAL_NET.joblib", "model": MLPClassifier(hidden_layer_sizes=(64, 32), max_iter=500)}
 ]
 
-print("\n" + "="*50)
-print("   MULAI TRAINING & VALIDASI (Ujian Model)")
-print("="*50)
-
+print("\n" + "="*40)
 for m in models_to_train:
-    print(f"\n🤖 Sedang Melatih: {m['name']}...")
+    print(f"🔥 Melatih {m['name']}...")
     clf = m['model']
     clf.fit(X_train, y_train)
     
-    # UJIAN (Testing)
     y_pred = clf.predict(X_test)
-    
-    # Hitung Nilai
     acc = accuracy_score(y_test, y_pred)
-    report = classification_report(y_test, y_pred, target_names=le.classes_)
-    cm = confusion_matrix(y_test, y_pred)
-    
     print(f"   ✅ Akurasi: {acc*100:.2f}%")
-    print("   📝 Laporan Detail:")
-    print(report)
-    print(f"   🧩 Confusion Matrix (Benar vs Salah Tebak):")
-    print(cm)
     
-    # Simpan
-    payload = {
-        'model': clf,
-        'scaler': scaler,
-        'columns': feature_columns
-    }
-    save_path = os.path.join(MODEL_DIR, m['name'])
-    joblib.dump(payload, save_path)
+    payload = {'model': clf, 'scaler': scaler, 'columns': feature_columns}
+    joblib.dump(payload, os.path.join(MODEL_DIR, m['name']))
 
-print("\n" + "="*50)
-print("✅ SELESAI! Semua model tersimpan di folder 'model/'.")
-print("👉 Silakan buka aplikasi GUI dan pilih model 'REAL_...' untuk pengujian.")
+print("\n✅ SELESAI! Model siap digunakan.")
