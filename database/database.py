@@ -1,7 +1,7 @@
 import sqlite3
 from sqlite3 import Error
 
-DB_FILE = "enose_pork.db"
+DB_FILE = "enose.db" # Database baru yang lebih general
 
 def create_connection():
     """ create a database connection to the SQLite database specified by db_file """
@@ -46,6 +46,41 @@ def add_detection_record(conn, timestamp, result, raw_data_str):
 def get_all_records(conn, filter_text=None, search_query=None, sort_column="timestamp", sort_order="DESC"):
     """
     Query all rows in the history table that match the filter and search criteria.
+    """
+    cur = conn.cursor()
+    
+    base_query = "SELECT id, timestamp, result, raw_data FROM history"
+    conditions = []
+    params = []
+
+    if filter_text and filter_text != "All":
+        conditions.append("result LIKE ?")
+        params.append(f"{filter_text}%")
+
+    if search_query:
+        conditions.append("(CAST(id AS TEXT) LIKE ? OR timestamp LIKE ? OR result LIKE ?)")
+        params.extend([f"%{search_query}%", f"%{search_query}%", f"%{search_query}%"])
+        
+    if conditions:
+        base_query += " WHERE " + " AND ".join(conditions)
+    
+    allowed_sort_columns = ["id", "timestamp", "result"]
+    if sort_column not in allowed_sort_columns:
+        sort_column = "timestamp"
+    
+    if sort_order.upper() not in ["ASC", "DESC"]:
+        sort_order = "DESC"
+
+    base_query += f" ORDER BY {sort_column} {sort_order}"
+
+    cur.execute(base_query, tuple(params))
+    rows = cur.fetchall()
+    return rows
+
+def get_all_records_filtered(conn, filter_text=None, search_query=None, sort_column="timestamp", sort_order="DESC"):
+    """
+    Query ALL rows (no pagination) in the history table that match the filter and search criteria.
+    Used for Exporting data.
     """
     cur = conn.cursor()
     

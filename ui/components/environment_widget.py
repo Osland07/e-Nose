@@ -1,52 +1,71 @@
-from PyQt6.QtWidgets import QGroupBox, QVBoxLayout
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel, QFrame
 from PyQt6.QtCore import Qt
-import os
-from .sensor_display import SensorDisplay
+from PyQt6.QtGui import QColor, QPalette
 
-class EnvironmentWidget(QGroupBox):
-    def __init__(self, parent=None):
-        super().__init__("Environment", parent)
+class StatCard(QFrame):
+    """Widget Kartu tunggal untuk menampilkan satu nilai sensor (misal: Suhu)"""
+    def __init__(self, title, unit, color_hex, icon_char=""):
+        super().__init__()
+        self.unit = unit
+        self.setObjectName("StatCard")
+        
+        # Styling Kartu
+        self.setStyleSheet(f"""
+            QFrame#StatCard {{
+                background-color: {color_hex};
+                border-radius: 12px;
+                border: 1px solid {color_hex};
+            }}
+            QLabel {{ color: white; }}
+        """)
         
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 15, 5, 5)
-        self.setMinimumHeight(160)
+        layout.setContentsMargins(15, 15, 15, 15)
         
-        base_path = os.path.abspath(os.path.dirname(__file__))
-        assets_path = os.path.join(base_path, '..', '..', 'assets')
+        # Header (Title + Icon)
+        header_layout = QHBoxLayout()
+        title_label = QLabel(title)
+        title_label.setStyleSheet("font-size: 12px; font-weight: bold; opacity: 0.8;")
+        
+        icon_label = QLabel(icon_char) # Bisa diganti icon SVG nanti
+        icon_label.setStyleSheet("font-size: 16px;")
+        
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(icon_label)
+        
+        # Value
+        self.value_label = QLabel(f"0 {unit}")
+        self.value_label.setStyleSheet("font-size: 22px; font-weight: 800;")
+        self.value_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        
+        layout.addLayout(header_layout)
+        layout.addWidget(self.value_label)
 
-        self.temperature_display = SensorDisplay(os.path.join(assets_path, 'temperature.svg'), "°C", "Temperature")
-        self.humidity_display = SensorDisplay(os.path.join(assets_path, 'humidity.svg'), "%", "Humidity")
-        self.pressure_display = SensorDisplay(os.path.join(assets_path, 'pressure.svg'), "hPa", "Pressure")
+    def set_value(self, value):
+        self.value_label.setText(f"{value:.1f} {self.unit}")
 
-        layout.addWidget(self.temperature_display, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(5)
-        layout.addWidget(self.humidity_display, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addSpacing(5)
-        layout.addWidget(self.pressure_display, alignment=Qt.AlignmentFlag.AlignCenter)
-        layout.addStretch()
-
-        self.setStyleSheet("""
-            QGroupBox { 
-                font-size: 14px; 
-                font-weight: bold; 
-                color: #1E3A8A; 
-                margin-top: 8px; 
-                border: 1px solid #E2E8F0; 
-                border-radius: 6px; 
-            }
-            QGroupBox::title { 
-                subcontrol-origin: margin; 
-                subcontrol-position: top center; 
-                padding: 3px 8px; 
-            }
-        """)
-
-    def update_values(self, temp, hum, press):
-        self.temperature_display.set_value(temp)
-        self.humidity_display.set_value(hum)
-        self.pressure_display.set_value(press / 100) # Convert Pa to hPa
+class EnvironmentWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self) # Stack Horizontal untuk ditaruh di atas grafik
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(15)
+        
+        # 3 Kartu dengan warna berbeda (Gradient feel)
+        # Suhu (Orange/Warm), Kelembaban (Blue/Cool), Tekanan (Teal/Neutral)
+        self.card_temp = StatCard("TEMPERATUR", "°C", "#F59E0B", "🌡") 
+        self.card_hum = StatCard("KELEMBABAN", "%", "#3B82F6", "💧")
+        self.card_pres = StatCard("TEKANAN", "hPa", "#10B981", "⏲")
+        
+        layout.addWidget(self.card_temp)
+        layout.addWidget(self.card_hum)
+        layout.addWidget(self.card_pres)
+        
+    def update_values(self, t, h, p):
+        self.card_temp.set_value(t)
+        self.card_hum.set_value(h)
+        self.card_pres.set_value(p)
 
     def reset(self):
-        self.temperature_display.reset()
-        self.humidity_display.reset()
-        self.pressure_display.reset()
+        self.update_values(0, 0, 0)

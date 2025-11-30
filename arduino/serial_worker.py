@@ -31,13 +31,14 @@ class SerialWorker(QThread):
                 try:
                     data = raw_data.decode('utf-8').strip()
                     if data:
-                        # Check if the data starts with a number, if not, it might be garbage
-                        if not data[0].isdigit() and not (data[0] == '-' and len(data) > 1 and data[1].isdigit()): # Handle negative numbers
-                            print(f"DEBUG (SerialWorker): Discarding non-numeric start data: '{data}' (raw: {raw_data!r})")
-                            continue
-
-                        print(f"DEBUG (SerialWorker): Decoded and stripped data: '{data}'")
-                        self.data_received.emit(data)
+                        # RELAXED VALIDATION: Accept almost anything for debugging purposes
+                        # Check if it at least contains a comma to be considered valid sensor data
+                        if ',' in data:
+                             print(f"DEBUG (SerialWorker): Data accepted: '{data}'")
+                             self.data_received.emit(data)
+                        else:
+                             print(f"DEBUG (SerialWorker): Ignored non-CSV data: '{data}'")
+                             
                 except UnicodeDecodeError as e:
                     print(f"DEBUG (SerialWorker): UnicodeDecodeError for raw data: {raw_data!r} - {e}. Discarding.")
                 except Exception as e:

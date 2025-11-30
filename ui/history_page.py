@@ -18,10 +18,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import Qt
 import math
-import csv
-
-from database.database import create_connection, get_record_by_id, delete_record_by_id, get_paginated_records, get_record_count, get_distinct_result_types
-from .detail_page import DetailPage
+import openpyxl
+from openpyxl.styles import Font, Alignment, PatternFill
+from database.database import create_connection, get_record_by_id, delete_record_by_id, get_paginated_records, get_record_count, get_distinct_result_types, get_all_records_filtered
 
 class HistoryPage(QWidget):
     def __init__(self):
@@ -54,7 +53,7 @@ class HistoryPage(QWidget):
         top_bar_layout.addStretch()
         layout.addLayout(top_bar_layout)
         
-        controls_group = QGroupBox("Filter and Search")
+        controls_group = QGroupBox("Filter, Search & Actions")
         controls_layout = QHBoxLayout(controls_group)
         
         self.filter_combo = QComboBox()
@@ -63,12 +62,20 @@ class HistoryPage(QWidget):
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search by ID, date, result...")
         self.search_input.textChanged.connect(self.apply_filters_and_search)
+        
+        # Tombol Export Excel Baru
+        self.export_all_btn = QPushButton("Export All to Excel")
+        self.export_all_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton))
+        self.export_all_btn.setStyleSheet("background-color: #10B981; color: white; font-weight: bold; padding: 5px 10px; border-radius: 4px;")
+        self.export_all_btn.clicked.connect(self.export_all_to_excel)
 
         controls_layout.addWidget(QLabel("Filter by Result:"))
         controls_layout.addWidget(self.filter_combo)
         controls_layout.addSpacing(20)
         controls_layout.addWidget(QLabel("Search:"))
         controls_layout.addWidget(self.search_input, 1)
+        controls_layout.addSpacing(20)
+        controls_layout.addWidget(self.export_all_btn)
         
         layout.addWidget(controls_group)
         layout.addSpacing(10)
@@ -144,64 +151,92 @@ class HistoryPage(QWidget):
 
         conn = create_connection()
         if not conn:
-            QMessageBox.warning(self, "Database Error", "Could not connect to the database.")
+            QMessageBox.warning(self, "Database Error", "Gagal terhubung ke database.")
             return
 
-        total_records = get_record_count(conn, filter_text, search_query)
-        self.total_pages = math.ceil(total_records / self.records_per_page) if total_records > 0 else 1
+        try:
+            # Hitung total halaman
+            total_records = get_record_count(conn, filter_text, search_query)
+            self.total_pages = math.ceil(total_records / self.records_per_page) if total_records > 0 else 1
+            
+            if self.current_page > self.total_pages: self.current_page = self.total_pages
+            if self.current_page < 1: self.current_page = 1
+
+            offset = (self.current_page - 1) * self.records_per_page
+            
+            # Ambil data halaman ini
+            records = get_paginated_records(conn, offset, self.records_per_page, filter_text, search_query)
+            
+            self.history_table.setRowCount(0) # Reset tabel
+            
+            if records:
+                self.history_table.setRowCount(len(records))
+                for i, record in enumerate(records):
+                    # record: (id, timestamp, result, raw_data)
+                    record_id = record[0]
+                    timestamp = record[1]
+                    result = record[2]
+                    
+                    # Kolom 1: ID
+                    self.history_table.setItem(i, 0, QTableWidgetItem(str(record_id)))
+                    
+                    # Kolom 2: Waktu
+                    self.history_table.setItem(i, 1, QTableWidgetItem(str(timestamp)))
+                    
+                    # Kolom 3: Hasil (Warna-warni dikit biar cantik)
+                    item_result = QTableWidgetItem(str(result))
+                    if "Terdeteksi" in str(result):
+                        item_result.setForeground(Qt.GlobalColor.red)
+                    else:
+                        item_result.setForeground(Qt.GlobalColor.darkGreen)
+                    item_result.setFont(self._get_bold_font())
+                    self.history_table.setItem(i, 2, item_result)
+                    
+                    # Kolom 4: Aksi (Tombol)
+                    self._create_action_buttons(i, record_id)
+                    
+                    # Alignment Tengah
+                    for j in range(3):
+                        if self.history_table.item(i, j):
+                            self.history_table.item(i, j).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            
+            self.update_pagination_ui()
+            
+        except Exception as e:
+            print(f"Error populating table: {e}")
+            QMessageBox.critical(self, "Error", f"Gagal memuat data: {e}")
+        finally:
+            conn.close()
+
+    def _create_action_buttons(self, row, record_id):
+        actions_widget = QWidget()
+        layout = QHBoxLayout(actions_widget)
+        layout.setContentsMargins(5, 2, 5, 2)
+        layout.setSpacing(10)
         
-        if self.current_page > self.total_pages:
-            self.current_page = self.total_pages
-        if self.current_page < 1:
-            self.current_page = 1
-
-        offset = (self.current_page - 1) * self.records_per_page
-        records = get_paginated_records(conn, offset, self.records_per_page, filter_text, search_query)
-        conn.close()
-
-        self.history_table.setRowCount(0) # Clear table before populating
-        self.history_table.setRowCount(len(records))
-        for i, record in enumerate(records):
-            record_id = record[0]
-            
-            self.history_table.setItem(i, 0, QTableWidgetItem(str(record_id)))
-            self.history_table.setItem(i, 1, QTableWidgetItem(record[1]))
-            self.history_table.setItem(i, 2, QTableWidgetItem(record[2]))
-            
-            actions_widget = QWidget()
-            actions_widget.setFixedHeight(40)
-            actions_layout = QHBoxLayout(actions_widget)
-            actions_layout.setContentsMargins(0, 0, 0, 0)
-            actions_layout.setSpacing(5)
-
-            style = self.style()
-            detail_icon = style.standardIcon(QStyle.StandardPixmap.SP_FileDialogInfoView)
-            delete_icon = style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon)
-            export_icon = style.standardIcon(QStyle.StandardPixmap.SP_ArrowDown)
-
-            detail_button = QPushButton(detail_icon, "")
-            delete_button = QPushButton(delete_icon, "")
-            export_button = QPushButton(export_icon, "")
-
-            self._set_icon_button_style(detail_button, "Lihat Detail")
-            self._set_icon_button_style(delete_button, "Hapus Record")
-            self._set_icon_button_style(export_button, "Ekspor Record")
-
-            detail_button.clicked.connect(lambda checked, rec_id=record_id: self.show_record_detail(rec_id))
-            delete_button.clicked.connect(lambda checked, rec_id=record_id: self.delete_record_confirmation(rec_id))
-            export_button.clicked.connect(lambda checked, rec_id=record_id: self.export_single_record(rec_id))
-            
-            actions_layout.addWidget(detail_button)
-            actions_layout.addWidget(delete_button)
-            actions_layout.addWidget(export_button)
-            actions_layout.addStretch()
-
-            self.history_table.setCellWidget(i, 3, actions_widget)
-
-            for j in range(3):
-                self.history_table.item(i, j).setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Tombol Detail
+        btn_detail = QPushButton("📄 Detail")
+        btn_detail.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_detail.setStyleSheet("background-color: #3B82F6; color: white; border-radius: 4px; padding: 4px;")
+        btn_detail.clicked.connect(lambda: self.show_record_detail(record_id))
         
-        self.update_pagination_ui()
+        # Tombol Hapus
+        btn_delete = QPushButton("🗑️")
+        btn_delete.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_delete.setFixedWidth(30)
+        btn_delete.setStyleSheet("background-color: #EF4444; color: white; border-radius: 4px; padding: 4px;")
+        btn_delete.clicked.connect(lambda: self.delete_record_confirmation(record_id))
+        
+        layout.addWidget(btn_detail)
+        layout.addWidget(btn_delete)
+        layout.addStretch()
+        
+        self.history_table.setCellWidget(row, 3, actions_widget)
+
+    def _get_bold_font(self):
+        font = self.history_table.font()
+        font.setBold(True)
+        return font
 
     def update_pagination_ui(self):
         if self.total_pages <= 1:
@@ -263,6 +298,73 @@ class HistoryPage(QWidget):
                 QMessageBox.warning(self, "Hapus Gagal", f"Record dengan ID {record_id} tidak ditemukan atau gagal dihapus.")
         except Exception as e:
             QMessageBox.critical(self, "Error Hapus", f"Terjadi kesalahan saat menghapus data: {e}")
+
+    def export_all_to_excel(self):
+        """Eksport semua data (sesuai filter saat ini) ke file Excel (.xlsx)."""
+        filter_text = self.filter_combo.currentText()
+        search_query = self.search_input.text()
+        
+        conn = create_connection()
+        if not conn:
+            return
+            
+        # Ambil semua data yang sesuai filter (bukan cuma 1 halaman)
+        records = get_all_records_filtered(conn, filter_text, search_query)
+        conn.close()
+        
+        if not records:
+            QMessageBox.information(self, "Info", "Tidak ada data untuk diekspor.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(self, "Export to Excel", "e_nose_history.xlsx", "Excel Files (*.xlsx)")
+        if not path:
+            return
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Detection History"
+            
+            # Header Style
+            headers = ["ID", "Waktu Deteksi", "Hasil Prediksi", "Raw Data (Preview)"]
+            ws.append(headers)
+            
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+            
+            for cell in ws[1]:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = Alignment(horizontal="center")
+
+            # Isi Data
+            for row_idx, record in enumerate(records, start=2):
+                ws.cell(row=row_idx, column=1, value=record[0]) # ID
+                ws.cell(row=row_idx, column=2, value=record[1]) # Timestamp
+                ws.cell(row=row_idx, column=3, value=record[2]) # Result
+                
+                # Raw data kadang panjang, kita potong dikit buat preview
+                raw_data_preview = record[3][:100] + "..." if len(record[3]) > 100 else record[3]
+                ws.cell(row=row_idx, column=4, value=raw_data_preview)
+
+            # Auto adjust column width (biar rapi)
+            for col in ws.columns:
+                max_length = 0
+                column = col[0].column_letter # Get the column name
+                for cell in col:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = (max_length + 2)
+                ws.column_dimensions[column].width = min(adjusted_width, 50) # Max width 50 biar gak lebar banget
+
+            wb.save(path)
+            QMessageBox.information(self, "Sukses", f"Data berhasil diekspor ke:\n{path}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error Export", f"Gagal menyimpan file Excel:\n{e}")
 
     def export_single_record(self, record_id):
         conn = create_connection()

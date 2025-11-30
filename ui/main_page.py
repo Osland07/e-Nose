@@ -44,52 +44,88 @@ class MainPage(QWidget):
 
     def setup_ui(self):
         main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(20) # Jarak antar panel kiri & kanan
         
-        # --- Left Panel ---
+        # --- Left Panel (Visual Data) ---
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0,0,0,0)
+        left_layout.setSpacing(15)
+        
+        # 1. Header Data (Environment) - Kita ubah EnvWidget jadi Horizontal di dalamnya
+        # Karena EnvironmentWidget aslinya Vertical, kita taruh dia di layout horizontal container kalau mau
+        # Tapi ide EnvironmentWidget di kanan bawah itu lama.
+        # Mari kita taruh Env Widget di ATAS Grafik.
+        
+        # Kita perlu ubah EnvironmentWidget jadi Horizontal? 
+        # Tidak perlu ubah classnya, kita bisa akali dengan menaruhnya di side kanan? 
+        # TAPI User minta rombak total. 
+        # Let's put Environment Widget on TOP of graph.
+        
+        # Agar EnvWidget berjejer horizontal, kita perlu modifikasi sedikit EnvironmentWidget (sudah dilakukan di step sebelumnya? 
+        # Oh wait, di kode EnvironmentWidget saya tadi buatnya Vertical Layout (layout = QVBoxLayout(self)). 
+        # SAYA PERLU UBAH EnvironmentWidget JADI HORIZONTAL DULU BIAR BAGUS DI ATAS.
+        
+        left_layout.addWidget(self.environment_widget) # Nanti kita ubah jadi horizontal
         left_layout.addWidget(self.graph_widget)
-        left_layout.addWidget(self.result_widget)
-        left_layout.addStretch()
-        left_layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        left_layout.addStretch()
         
-        # --- Right Panel ---
+        # --- Right Panel (Control & Result) ---
         right_panel = QWidget()
-        right_panel.setFixedWidth(220)
+        right_panel.setFixedWidth(320) # Lebih lebar biar Result enak dilihat
         right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(0,0,0,0)
+        right_layout.setSpacing(15)
         
-        # --- Settings Group ---
-        settings_group = QGroupBox("Settings")
-        settings_layout = QFormLayout(settings_group)
-        settings_layout.setContentsMargins(8, 15, 8, 8)
-        self.duration_spinbox.setRange(5, 120)
-        self.duration_spinbox.setValue(15)
-        self.duration_spinbox.setSuffix(" s")
-        settings_layout.addRow(QLabel("Detection Duration:"), self.duration_spinbox)
+        right_layout.addWidget(self.result_widget) # Result paling atas biar kelihatan
         
-        controls_group = QGroupBox("Device & Model Control")
-        controls_layout = QVBoxLayout(controls_group)
+        # Container untuk kontrol
+        controls_box = QGroupBox("Control Center")
+        controls_layout = QVBoxLayout(controls_box)
+        controls_layout.setSpacing(10)
+        
         controls_layout.addWidget(self.device_control)
         controls_layout.addWidget(self.model_control)
         
-        right_layout.addWidget(controls_group)
-        right_layout.addWidget(settings_group)
-        right_layout.addWidget(self.environment_widget)
+        # Settings Time
+        settings_layout = QHBoxLayout()
+        lbl_durasi = QLabel("Durasi Deteksi:")
+        lbl_durasi.setStyleSheet("font-weight: bold;")
+        
+        self.duration_spinbox.setRange(5, 300) # Bisa sampai 300 detik (5 menit)
+        self.duration_spinbox.setValue(15)
+        self.duration_spinbox.setSuffix(" Detik") # Keterangan lebih jelas
+        self.duration_spinbox.setFixedWidth(120)
+        
+        settings_layout.addWidget(lbl_durasi)
+        settings_layout.addWidget(self.duration_spinbox)
+        controls_layout.addLayout(settings_layout)
+        
+        right_layout.addWidget(controls_box)
+        
+        # Tombol Start Paling Bawah Besar
+        self.start_button.setMinimumHeight(60)
+        self.start_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        right_layout.addWidget(self.start_button)
         right_layout.addStretch()
 
-        main_layout.addWidget(left_panel)
+        main_layout.addWidget(left_panel, 1) # Left panel expand
         main_layout.addWidget(right_panel)
 
         self.start_button.setEnabled(False)
-        self.start_button.setMinimumHeight(50)
+        # Styling Tombol Start
         self.start_button.setStyleSheet("""
-            QPushButton { background-color: #2563EB; color: white; padding: 15px 30px; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; }
+            QPushButton { 
+                background-color: #2563EB; 
+                color: white; 
+                border: none; 
+                border-radius: 10px; 
+                font-size: 18px; 
+                font-weight: bold; 
+                letter-spacing: 1px;
+            }
             QPushButton:hover { background-color: #1D4ED8; }
-            QPushButton:disabled { background-color: #9CA3AF; }
+            QPushButton:disabled { background-color: #334155; color: #64748B; }
         """)
-        # The progress bar max will be set dynamically now
-        # self.result_widget.set_progress_max(DETECTION_DURATION_MS)
 
     def connect_signals(self):
         self.device_control.connection_status_changed.connect(self.on_connection_status_changed)
@@ -109,24 +145,37 @@ class MainPage(QWidget):
         self.update_start_button_state()
 
     def on_data_received(self, data_string):
-        print(f"DEBUG: Data string received: '{data_string}'") # Re-added for debugging
+        print(f"DEBUG: Data string received: '{data_string}'") 
         try:
             sensor_values = [float(x.strip()) for x in data_string.split(',')]
-            if len(sensor_values) != TOTAL_EXPECTED_VALUES:
-                print(f"DEBUG: Incorrect number of sensor values. Expected {TOTAL_EXPECTED_VALUES}, got {len(sensor_values)} for '{data_string}'") # Re-added for debugging
-                return
+            
+            # Toleransi jumlah data:
+            # Jika data kurang dari 11, kita pad dengan 0.
+            # Jika data lebih dari 11, kita potong.
+            if len(sensor_values) < TOTAL_EXPECTED_VALUES:
+                print(f"DEBUG: Data kurang ({len(sensor_values)}), padding dengan 0.")
+                sensor_values.extend([0.0] * (TOTAL_EXPECTED_VALUES - len(sensor_values)))
+            elif len(sensor_values) > TOTAL_EXPECTED_VALUES:
+                print(f"DEBUG: Data berlebih ({len(sensor_values)}), memotong data.")
+                sensor_values = sensor_values[:TOTAL_EXPECTED_VALUES]
 
             graph_values = sensor_values[:NUM_GRAPH_SENSORS]
             bme_values = sensor_values[NUM_GRAPH_SENSORS:]
             
+            # Pastikan bme_values punya minimal 3 data (Temp, Hum, Pres)
+            # Jika tidak ada, isi default 0
+            t = bme_values[0] if len(bme_values) > 0 else 0
+            h = bme_values[1] if len(bme_values) > 1 else 0
+            p = bme_values[2] if len(bme_values) > 2 else 0
+            
             self.graph_widget.update_plot(graph_values)
-            self.environment_widget.update_values(bme_values[0], bme_values[1], bme_values[2])
+            self.environment_widget.update_values(t, h, p)
             
             if self.is_detecting:
                 self.data_buffer.append(data_string)
 
         except (ValueError, IndexError) as e:
-            print(f"DEBUG: Parsing error in on_data_received for '{data_string}': {e}") # Re-added for debugging
+            print(f"DEBUG: Parsing error in on_data_received for '{data_string}': {e}")
             pass 
 
     def toggle_detection(self):
@@ -161,6 +210,12 @@ class MainPage(QWidget):
         if self.is_detecting:
             current_value = self.result_widget.progress_bar.value() + self.progress_timer.interval()
             self.result_widget.set_progress_value(current_value)
+            
+            # Hitung Sisa Waktu untuk Countdown
+            max_val = self.result_widget.progress_bar.maximum()
+            remaining = max_val - current_value
+            if remaining < 0: remaining = 0
+            self.result_widget.update_countdown(remaining)
 
     def _finish_detection(self):
         if not self.is_detecting:
@@ -178,9 +233,12 @@ class MainPage(QWidget):
             self.update_start_button_state()
             return
 
-        result_label, confidence = self.predictor.predict(self.data_buffer)
-        self.result_widget.set_result(result_label, confidence)
-        self._save_record(f"{result_label} ({confidence:.2f}%)", self.data_buffer)
+        # --- ENSEMBLE PREDICTION ---
+        # Kita panggil 'predict_all_models' untuk dapat voting dari semua otak
+        result_label, confidence, details = self.predictor.predict_all_models(self.data_buffer)
+        
+        self.result_widget.set_result(result_label, confidence, details)
+        self._save_record(f"{result_label} ({confidence:.0f}%)", self.data_buffer)
             
         self.start_button.setText("Mulai Deteksi")
         self.update_start_button_state()

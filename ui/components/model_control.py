@@ -9,7 +9,9 @@ from PyQt6.QtWidgets import (
     QComboBox, 
     QGroupBox,
     QFileDialog,
-    QMessageBox
+    QMessageBox,
+    QHBoxLayout,
+    QFrame
 )
 from PyQt6.QtCore import pyqtSignal, QObject, QThread, Qt
 from ml.predictor import Predictor
@@ -40,28 +42,60 @@ class ModelControlWidget(QWidget):
         self.thread = None
         self.worker = None
 
-        # --- UI Setup ---
-        layout = QGroupBox("Upload Model")
-        form_layout = QVBoxLayout(layout)
-        form_layout.setContentsMargins(8, 10, 8, 8)
-        form_layout.setSpacing(6)
+        # --- UI Setup (Minimalist Style) ---
+        # Gunakan QFrame biasa (bukan GroupBox) agar lebih bersih
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 5, 0, 5)
+        layout.setSpacing(8)
+        
+        # Header Label
+        lbl_header = QLabel("🤖 Model Deteksi (AI)")
+        lbl_header.setStyleSheet("font-weight: bold; color: #475569; font-size: 12px;")
+        layout.addWidget(lbl_header)
+        
+        # Container Row
+        row_layout = QHBoxLayout()
+        row_layout.setContentsMargins(0, 0, 0, 0)
         
         self.model_selector = QComboBox()
-        self.upload_button = QPushButton("📁 Pilih File Model")
-        self.model_status_label = QLabel("Model: (belum ada)")
+        self.model_selector.setMinimumHeight(30)
+        self.model_selector.setStyleSheet("""
+            QComboBox {
+                padding: 2px 10px;
+                border: 1px solid #CBD5E1;
+                border-radius: 6px;
+                background-color: white;
+                color: #334155;
+            }
+            QComboBox::drop-down { border: 0px; }
+        """)
+        
+        self.upload_button = QPushButton("📂 Upload")
+        self.upload_button.setToolTip("Upload file model baru (.joblib)")
+        self.upload_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.upload_button.setFixedSize(80, 30)
+        self.upload_button.setStyleSheet("""
+            QPushButton {
+                background-color: white;
+                color: #2563EB;
+                border: 1px solid #2563EB;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #EFF6FF;
+            }
+        """)
 
-        form_layout.addWidget(QLabel("Pilih Model:"))
-        form_layout.addWidget(self.model_selector)
-        form_layout.addSpacing(2)
-        form_layout.addWidget(self.upload_button)
-        form_layout.addSpacing(2)
-        form_layout.addWidget(self.model_status_label)
+        row_layout.addWidget(self.model_selector, 1) # Expand combo
+        row_layout.addWidget(self.upload_button)
         
-        # Main layout for this widget
-        main_v_layout = QVBoxLayout(self)
-        main_v_layout.addWidget(layout)
+        layout.addLayout(row_layout)
         
-        self.setup_ui_styles()
+        # Status Label (Small)
+        self.model_status_label = QLabel("Status: Menunggu...")
+        self.model_status_label.setStyleSheet("font-size: 10px; color: #94A3B8; margin-left: 2px;")
+        layout.addWidget(self.model_status_label)
 
         # --- Signal Connections ---
         self.upload_button.clicked.connect(self.upload_new_model)
@@ -69,20 +103,6 @@ class ModelControlWidget(QWidget):
         
         # --- Initial State ---
         self.populate_model_selector()
-
-    def setup_ui_styles(self):
-        self.setStyleSheet("""
-            QGroupBox { font-size: 13px; font-weight: bold; color: #1E3A8A; margin-top: 8px; border: 2px solid #3B82F6; border-radius: 6px; background-color: #F0F9FF; }
-            QGroupBox::title { subcontrol-origin: margin; subcontrol-position: top left; padding: 3px 8px; }
-        """)
-        self.upload_button.setStyleSheet("""
-            QPushButton { background-color: #3B82F6; color: white; font-size: 11px; font-weight: 600; padding: 8px 12px; border: none; border-radius: 4px; } 
-            QPushButton:hover { background-color: #2563EB; }
-            QPushButton:disabled { background-color: #9CA3AF; color: #E5E7EB; }
-        """)
-        self.upload_button.setMinimumHeight(32)
-        self.model_selector.setStyleSheet("QComboBox { font-size: 10px; padding: 6px; border: 1px solid #D1D5DB; border-radius: 4px; background-color: white; } QComboBox:disabled { background-color: #F3F4F6; }")
-        self.model_status_label.setStyleSheet("font-size: 9px; color: #64748B; font-style: italic;")
 
     def upload_new_model(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Pilih File Model", "", "Joblib Files (*.joblib)")
@@ -95,6 +115,9 @@ class ModelControlWidget(QWidget):
                 shutil.copy(fileName, dest_path)
                 self.populate_model_selector()
                 self.model_selector.setCurrentText(os.path.basename(fileName))
+                
+                QMessageBox.information(self, "Sukses", f"Model '{os.path.basename(fileName)}' berhasil ditambahkan!")
+                
             except Exception as e:
                 self.show_error_message("Upload Gagal", f"Terjadi kesalahan saat menyalin file model: {e}")
 
@@ -107,14 +130,14 @@ class ModelControlWidget(QWidget):
             self.start_model_loading()
         else:
             self.model_selector.addItem("Tidak ada model")
-            self.model_status_label.setText("Model: Upload model Anda.")
+            self.model_status_label.setText("Status: Silakan upload model.")
             self.model_loaded.emit(False)
         self.model_selector.blockSignals(False)
 
     def start_model_loading(self):
         selected_model_file = self.model_selector.currentText()
         if selected_model_file in ["Tidak ada model", ""]:
-            self.model_status_label.setText("Model: Tidak ada model terpilih.")
+            self.model_status_label.setText("Status: Pilih model.")
             self.model_loaded.emit(False)
             return
         
@@ -134,18 +157,31 @@ class ModelControlWidget(QWidget):
         selected_model_file = self.model_selector.currentText()
         
         if payload and self.predictor.load_model_from_payload(payload):
-            # Also set the filename for reference
             self.predictor.loaded_model_name = selected_model_file
-            self.model_status_label.setText(f"Model: {selected_model_file}")
+            
+            # DETEKSI TIPE MODEL
+            model_obj = payload.get('model')
+            model_type = type(model_obj).__name__
+            
+            # Terjemahkan nama teknis ke bahasa manusia
+            if "SVC" in model_type: readable_type = "SVM (Support Vector Machine)"
+            elif "RandomForest" in model_type: readable_type = "Random Forest (Ensemble)"
+            elif "KNeighbors" in model_type: readable_type = "KNN (K-Nearest Neighbor)"
+            elif "MLP" in model_type: readable_type = "Neural Network (MLP)"
+            else: readable_type = model_type # Fallback
+            
+            # Update Label Status dengan info lengkap
+            self.model_status_label.setText(f"✅ Aktif: {selected_model_file}\n🧠 Algoritma: {readable_type}")
+            self.model_status_label.setStyleSheet("font-size: 10px; color: #10B981; font-weight: bold;")
             self.model_loaded.emit(True)
         else:
-            self.model_status_label.setText(f"Gagal memuat: {selected_model_file}")
+            self.model_status_label.setText(f"❌ Error: {selected_model_file}")
+            self.model_status_label.setStyleSheet("font-size: 10px; color: #EF4444;")
             self.model_loaded.emit(False)
-            self.show_error_message("Model tidak valid", "File model yang dipilih rusak atau tidak memiliki format yang benar (harus berisi 'model', 'scaler', dan 'columns').")
+            self.show_error_message("Model tidak valid", "File model rusak/tidak kompatibel.")
         
         self.set_loading_state(False)
 
-        # Clean up thread
         if self.thread is not None:
             self.thread.quit()
             self.thread.wait()
@@ -154,7 +190,8 @@ class ModelControlWidget(QWidget):
         self.model_selector.setEnabled(not is_loading)
         self.upload_button.setEnabled(not is_loading)
         if is_loading:
-            self.model_status_label.setText("<i>Memuat model...</i>")
+            self.model_status_label.setText("⏳ Memuat model...")
+            self.model_status_label.setStyleSheet("font-size: 10px; color: #F59E0B;")
         
     def show_error_message(self, title, message):
         msg_box = QMessageBox(self)
