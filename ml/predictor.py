@@ -79,10 +79,10 @@ class Predictor:
             self.feature_columns = None
             return False
 
-    def predict_all_models(self, buffered_data):
+    def predict_all_models(self, buffered_data, whitelist=None):
         """
-        ENSEMBLE MODE: Memprediksi menggunakan SEMUA model yang ada di folder.
-        Mengembalikan: (final_label, final_confidence, detailed_results)
+        ENSEMBLE MODE: Memprediksi menggunakan model yang dipilih.
+        whitelist: List nama file model yang boleh ikut voting. Jika None/Kosong, pakai semua.
         """
         # 1. Parse Data Sekali Saja
         sensor_names = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM']
@@ -99,12 +99,20 @@ class Predictor:
         except:
             return "Error Data", 0.0, []
 
-        # 2. Loop Semua Model
-        models = self.get_available_models()
+        # 2. Loop Model (Filtered)
+        all_models = self.get_available_models()
+        
+        # Filter berdasarkan whitelist jika ada
+        if whitelist:
+            active_models = [m for m in all_models if m in whitelist]
+            if not active_models: active_models = all_models # Fallback jika whitelist salah
+        else:
+            active_models = all_models
+
         results = []
         votes = {}
         
-        for model_file in models:
+        for model_file in active_models:
             # Load model sementara
             full_path = os.path.join(self.MODEL_DIR, model_file)
             try:

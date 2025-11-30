@@ -33,6 +33,62 @@ class ModelLoader(QObject):
             self.finished.emit(None)
 
 
+class VotingConfigDialog(QDialog):
+    def __init__(self, available_models, current_selection, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Konfigurasi Tim Voting (Ensemble)")
+        self.setFixedSize(400, 500)
+        
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Pilih model yang akan ikut serta dalam voting:"))
+        
+        self.checks = {}
+        
+        # Scroll Area jika modelnya banyak
+        from PyQt6.QtWidgets import QScrollArea
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        
+        for model in available_models:
+            chk = QCheckBox(model)
+            # Default checked jika list kosong (pertama kali) atau ada di list
+            if not current_selection or model in current_selection:
+                chk.setChecked(True)
+            content_layout.addWidget(chk)
+            self.checks[model] = chk
+            
+        content_layout.addStretch()
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        
+        # Tombol Aksi
+        btn_layout = QHBoxLayout()
+        btn_all = QPushButton("Pilih Semua")
+        btn_none = QPushButton("Hapus Semua")
+        btn_all.clicked.connect(self.select_all)
+        btn_none.clicked.connect(self.select_none)
+        
+        btn_layout.addWidget(btn_all)
+        btn_layout.addWidget(btn_none)
+        layout.addLayout(btn_layout)
+        
+        btn_save = QPushButton("Simpan Konfigurasi")
+        btn_save.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold; padding: 8px;")
+        btn_save.clicked.connect(self.accept)
+        layout.addWidget(btn_save)
+
+    def select_all(self):
+        for chk in self.checks.values(): chk.setChecked(True)
+        
+    def select_none(self):
+        for chk in self.checks.values(): chk.setChecked(False)
+        
+    def get_selected(self):
+        return [name for name, chk in self.checks.items() if chk.isChecked()]
+
+
 class ModelControlWidget(QWidget):
     model_loaded = pyqtSignal(bool)
 
@@ -41,9 +97,9 @@ class ModelControlWidget(QWidget):
         self.predictor = predictor
         self.thread = None
         self.worker = None
+        self.voting_whitelist = [] # Daftar model yang boleh ikut voting
 
         # --- UI Setup (Minimalist Style) ---
-        # Gunakan QFrame biasa (bukan GroupBox) agar lebih bersih
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(8)
@@ -53,46 +109,35 @@ class ModelControlWidget(QWidget):
         lbl_header.setStyleSheet("font-weight: bold; color: #475569; font-size: 12px;")
         layout.addWidget(lbl_header)
         
-        # Container Row
+        # Container Row (Dropdown + Upload)
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
         
         self.model_selector = QComboBox()
         self.model_selector.setMinimumHeight(30)
         self.model_selector.setStyleSheet("""
-            QComboBox {
-                padding: 2px 10px;
-                border: 1px solid #CBD5E1;
-                border-radius: 6px;
-                background-color: white;
-                color: #334155;
-            }
+            QComboBox { padding: 2px 10px; border: 1px solid #CBD5E1; border-radius: 6px; background-color: white; color: #334155; }
             QComboBox::drop-down { border: 0px; }
         """)
         
-        self.upload_button = QPushButton("📂 Upload")
-        self.upload_button.setToolTip("Upload file model baru (.joblib)")
+        self.upload_button = QPushButton("📂")
+        self.upload_button.setToolTip("Upload model baru")
         self.upload_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.upload_button.setFixedSize(80, 30)
-        self.upload_button.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                color: #2563EB;
-                border: 1px solid #2563EB;
-                border-radius: 6px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #EFF6FF;
-            }
-        """)
+        self.upload_button.setFixedSize(30, 30)
+        self.upload_button.setStyleSheet("QPushButton { background-color: white; border: 1px solid #CBD5E1; border-radius: 6px; } QPushButton:hover { background-color: #F1F5F9; }")
 
-        row_layout.addWidget(self.model_selector, 1) # Expand combo
+        row_layout.addWidget(self.model_selector, 1)
         row_layout.addWidget(self.upload_button)
-        
         layout.addLayout(row_layout)
         
-        # Status Label (Small)
+        # Tombol Config Voting
+        self.btn_voting_config = QPushButton("⚙️ Atur Tim Voting")
+        self.btn_voting_config.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_voting_config.setStyleSheet("background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px; font-weight: bold; font-size: 11px;")
+        self.btn_voting_config.clicked.connect(self.open_voting_config)
+        layout.addWidget(self.btn_voting_config)
+        
+        # Status Label
         self.model_status_label = QLabel("Status: Menunggu...")
         self.model_status_label.setStyleSheet("font-size: 10px; color: #94A3B8; margin-left: 2px;")
         layout.addWidget(self.model_status_label)
@@ -103,6 +148,21 @@ class ModelControlWidget(QWidget):
         
         # --- Initial State ---
         self.populate_model_selector()
+
+    def open_voting_config(self):
+        all_models = self.predictor.get_available_models()
+        if not all_models:
+            QMessageBox.warning(self, "Info", "Belum ada model tersedia. Silakan Training dulu.")
+            return
+            
+        dlg = VotingConfigDialog(all_models, self.voting_whitelist, self)
+        if dlg.exec():
+            self.voting_whitelist = dlg.get_selected()
+            count = len(self.voting_whitelist)
+            self.btn_voting_config.setText(f"⚙️ Tim Voting: {count} Model")
+            
+    def get_voting_whitelist(self):
+        return self.voting_whitelist
 
     def upload_new_model(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Pilih File Model", "", "Joblib Files (*.joblib)")

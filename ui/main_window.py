@@ -14,6 +14,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont
 
+# --- IMPORT HALAMAN ---
+from ui.main_page import MainPage
+from ui.history_page import HistoryPage
 from ui.training_page import TrainingPage
 from ui.help_page import HelpPage
 from ui.components.toast import ToastNotification

@@ -234,8 +234,11 @@ class MainPage(QWidget):
             return
 
         # --- ENSEMBLE PREDICTION ---
-        # Kita panggil 'predict_all_models' untuk dapat voting dari semua otak
-        result_label, confidence, details = self.predictor.predict_all_models(self.data_buffer)
+        # Ambil whitelist dari control panel
+        whitelist = self.model_control.get_voting_whitelist()
+        
+        # Kita panggil 'predict_all_models' untuk dapat voting
+        result_label, confidence, details = self.predictor.predict_all_models(self.data_buffer, whitelist)
         
         self.result_widget.set_result(result_label, confidence, details)
         self._save_record(f"{result_label} ({confidence:.0f}%)", self.data_buffer)
