@@ -11,7 +11,8 @@ from PyQt6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QHBoxLayout,
-    QFrame
+    QFrame,
+    QDialog # <-- Tambahkan ini
 )
 from PyQt6.QtCore import pyqtSignal, QObject, QThread, Qt
 from ml.predictor import Predictor
