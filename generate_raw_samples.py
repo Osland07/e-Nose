@@ -5,13 +5,21 @@ import random
 
 # --- KONFIGURASI ---
 BASE_DIR = "sample_data"
+
+# DEFINISI PROFIL BAU (DATASET RAKSASA)
+# Total 10.000 File (5000 Positif + 5000 Negatif)
 CLASSES = {
-    "Terdeteksi Biomarker": {"base_val": 800, "count": 500}, # Nilai Tinggi (Banyakin jadi 500)
-    "Tidak Terdeteksi":     {"base_val": 30,  "count": 500}  # Nilai Rendah (Banyakin jadi 500)
+    "Tidak Terdeteksi": {
+        "base": 50,   "var": 20, "desc": "Udara Bersih/Sapi Murni"
+    },
+    "Terdeteksi Biomarker": {
+        "base": 450,  "var": 100, "desc": "Terkontaminasi Babi"
+    }
 }
+
 SENSORS = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM', 'Temp', 'Hum', 'Pres']
 
-print("--- GENERATOR DATA MENTAH (RAW CSV) ---")
+print("--- GENERATOR DATA MENTAH (BIG DATA - 10.000 SAMPEL) ---")
 
 if not os.path.exists(BASE_DIR):
     os.makedirs(BASE_DIR)
@@ -22,42 +30,45 @@ for label, config in CLASSES.items():
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     
-    print(f"📂 Membuat {config['count']} file di folder: {label}...")
+    # FIX: Loop manual 5000 kali
+    TARGET_COUNT = 5000
+    print(f"📂 Membuat {TARGET_COUNT} file di folder: {label}...") 
     
-    for i in range(config['count']):
-        # Generate Data Palsu (Misal 10 detik perekaman per file)
+    for i in range(TARGET_COUNT):
         rows = []
-        for _ in range(10): # 10 baris data per file
+        for _ in range(15): # 15 detik data
             row = {}
-            base = config['base_val']
+            base_val = config['base']
+            variance = config['var']
             
-            # Sensor Gas (MQ & QCM)
+            # Sensor Gas
             for s in SENSORS[:8]: 
-                # Variasi: MQ135 dan QCM paling sensitif
-                if s in ['MQ135', 'QCM'] and label == "Terdeteksi Biomarker":
-                    val = base + random.uniform(50, 150)
-                else:
-                    val = base + random.uniform(-10, 10)
+                noise = random.uniform(-variance, variance)
                 
-                # Pastikan tidak negatif
-                row[s] = max(0, val)
+                # Karakteristik Khas Biomarker (MQ135 & QCM Naik Signifikan)
+                if label == "Terdeteksi Biomarker" and s in ['MQ135', 'QCM']:
+                    val = base_val * 1.5 + noise # Lebih tinggi lagi
+                else:
+                    val = base_val + noise
+                
+                row[s] = max(10, val)
             
-            # Lingkungan (Temp, Hum, Pres)
-            row['Temp'] = 28.5 + random.uniform(-0.5, 0.5)
-            row['Hum'] = 60.0 + random.uniform(-2, 2)
-            row['Pres'] = 1005.0 + random.uniform(-1, 1)
+            # Lingkungan
+            row['Temp'] = 28.5 + random.uniform(-1, 1)
+            row['Hum'] = 60.0 + random.uniform(-5, 5)
+            row['Pres'] = 1005.0 + random.uniform(-2, 2)
             
             rows.append(row)
         
-        # Buat DataFrame
+        # Simpan CSV
         df = pd.DataFrame(rows)
-        
-        # Simpan ke CSV (Format Excel Indo: sep=; decimal=,)
-        filename = f"sample_{i+1:03d}.csv"
+        filename = f"sample_{i+1:05d}.csv" # 00001.csv
         filepath = os.path.join(folder_path, filename)
-        
-        # Trik simpan format Indo
         df.to_csv(filepath, sep=';', decimal=',', index=False)
+        
+        # Progress bar sederhana di terminal
+        if (i+1) % 500 == 0:
+            print(f"   ... {i+1} file selesai.")
 
-print("\n✅ SELESAI! Folder 'sample_data' sudah terisi.")
-print("👉 Sekarang Anda bisa mencoba menu 'Training Center' di aplikasi.")
+print("\n✅ SELESAI! 10.000 File CSV siap.")
+print("👉 Proses Training nanti akan butuh waktu agak lama (1-3 menit).")

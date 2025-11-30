@@ -98,14 +98,14 @@ class DeviceControlWidget(QWidget):
         # Generate 8 Sensor Gas + QCM
         for i in range(8):
             if is_bio:
-                # KASUS BIOMARKER: Buat Nilai SANGAT TINGGI agar AI yakin 99%
-                # MQ135 (idx 6) dan QCM (idx 7) adalah fitur utama
-                if i == 6: base = 800.0 # MQ135 Tinggi
-                elif i == 7: base = 900.0 # QCM Tinggi
-                else: base = 400.0 # Sensor lain juga naik
+                # KASUS BIOMARKER: Sesuaikan dengan Data Training (Range 300-600)
+                # Jangan terlalu ekstrim (800) karena SVM sensitif outlier
+                if i == 6: base = 500.0 # MQ135
+                elif i == 7: base = 550.0 # QCM
+                else: base = 350.0 
             else:
-                # KASUS BERSIH: Nilai Sangat Rendah
-                base = 20.0
+                # KASUS BERSIH
+                base = 50.0
             
             # Tambah noise random dikit biar grafik goyang
             val = base + random.uniform(-5, 5)

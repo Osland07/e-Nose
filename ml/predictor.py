@@ -11,11 +11,9 @@ class Predictor:
     def __init__(self):
         self.model = None
         self.scaler = None
-        self.le = LabelEncoder()
+        self.le = LabelEncoder() # Jangan di-fit dulu
         self.feature_columns = None
         self.loaded_model_name = None
-        # Fit the label encoder with the new generic classes
-        self.le.fit(['Terdeteksi Biomarker', 'Tidak Terdeteksi'])
 
     def load_model(self, model_filename):
         """
@@ -133,16 +131,22 @@ class Predictor:
                 proba = np.max(tmp_model.predict_proba(X_scaled)) * 100
                 
                 # Decode Label
-                # Kita asumsikan semua model pakai encoder yang mirip/sama
-                # Atau kita coba decode manual jika memungkinkan
-                try:
-                    label = self.le.inverse_transform([pred_idx])[0]
-                except:
-                    # Fallback: coba tebak dari atribut classes_ model jika ada
-                    if hasattr(tmp_model, 'classes_'):
-                        label = tmp_model.classes_[pred_idx]
-                    else:
-                        label = str(pred_idx)
+                # Cek apakah label berupa angka (0/1) dan terjemahkan
+                raw_label = pred_idx
+                if hasattr(tmp_model, 'classes_'):
+                    raw_label = tmp_model.classes_[pred_idx]
+                
+                # KAMUS PENERJEMAH (Fallback jika model hanya simpan 0/1)
+                # 0 biasanya Terdeteksi (huruf T lebih awal dari Tidak? Tidak, Te vs Ti. Te menang)
+                # Ups, Alphabetical: 
+                # 0 = "Terdeteksi Biomarker" (Te...)
+                # 1 = "Tidak Terdeteksi" (Ti...)
+                
+                label = str(raw_label)
+                if label == "0": 
+                    label = "Terdeteksi Biomarker"
+                elif label == "1": 
+                    label = "Tidak Terdeteksi"
 
                 # Simpan Hasil
                 model_name = model_file.replace(".joblib", "").replace("MODEL_", "").replace("REAL_", "")
@@ -162,10 +166,16 @@ class Predictor:
             return "No Models", 0.0, []
 
         # 3. Hitung Pemenang Voting
-        winner = max(votes, key=votes.get)
-        vote_count = votes[winner]
-        total_models = len(results)
-        confidence = (vote_count / total_models) * 100
+        if len(results) == 1:
+            # SINGLE MODEL MODE: Kembalikan confidence asli model tersebut
+            winner = results[0]['label']
+            confidence = results[0]['conf']
+        else:
+            # VOTING MODE: Kembalikan persentase kesepakatan juri
+            winner = max(votes, key=votes.get)
+            vote_count = votes[winner]
+            total_models = len(results)
+            confidence = (vote_count / total_models) * 100
         
         return winner, confidence, results
 

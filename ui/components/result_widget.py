@@ -19,14 +19,36 @@ class VotingDetailDialog(QDialog):
         table.setHorizontalHeaderLabels(["Nama Model", "Keputusan", "Keyakinan"])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table.setRowCount(len(details))
-        table.setStyleSheet("QTableWidget { background-color: white; gridline-color: #ccc; }")
+        # Paksa warna putih agar tidak hitam (dark mode artifact)
+        table.setStyleSheet("""
+            QTableWidget { 
+                background-color: white; 
+                color: black; 
+                gridline-color: #E5E7EB;
+                border: 1px solid #E5E7EB;
+            }
+            QHeaderView::section {
+                background-color: #F3F4F6;
+                color: #1F2937;
+                font-weight: bold;
+                border: none;
+                padding: 5px;
+            }
+            QTableWidget::item {
+                color: black;
+            }
+        """)
         
         for i, d in enumerate(details):
             table.setItem(i, 0, QTableWidgetItem(d['name']))
             
-            res_item = QTableWidgetItem(d['label'])
-            if "Terdeteksi" in d['label']: res_item.setForeground(Qt.GlobalColor.red)
-            else: res_item.setForeground(Qt.GlobalColor.darkGreen)
+            label_str = str(d['label']) # Pastikan string
+            res_item = QTableWidgetItem(label_str)
+            
+            if "Terdeteksi" in label_str or "Babi" in label_str: 
+                res_item.setForeground(Qt.GlobalColor.red)
+            else: 
+                res_item.setForeground(Qt.GlobalColor.darkGreen)
             
             font = QFont()
             font.setBold(True)
@@ -156,7 +178,8 @@ class ResultWidget(QWidget):
             self.btn_detail.hide()
 
         # Logika Warna
-        if "Tidak" in label or "Clean" in label or "Sapi" in label:
+        label_str = str(label)
+        if "Tidak" in label_str or "Clean" in label_str or "Sapi" in label_str:
             color = "#10B981" # Hijau (Aman)
             icon = "✅"
         else:
@@ -165,7 +188,7 @@ class ResultWidget(QWidget):
 
         self._style_card(color)
         self.status_label.setText("KEPUTUSAN FINAL")
-        self.result_label.setText(f"{icon} {label.upper()}")
+        self.result_label.setText(f"{icon} {label_str.upper()}")
         self.conf_label.setText(f"Tingkat Keyakinan: {confidence:.0f}%")
         self.progress_bar.hide()
 

@@ -22,71 +22,53 @@ class HelpPage(QWidget):
         
         # Konten HTML untuk Panduan
         html_content = """
-        <h1 style="color: #1E3A8A;">📘 Panduan Pengguna E-Nose AI</h1>
+        <h1 style="color: #1E3A8A;">📘 Panduan & Spesifikasi Teknis E-Nose</h1>
         <hr>
         
-        <h3>1. Cara Menggunakan Sistem</h3>
-        <ol>
-            <li><b>Persiapan:</b> Pastikan Arduino terhubung ke USB. Jika tidak ada alat, aktifkan <i>Mode Simulasi</i> di Dashboard.</li>
-            <li><b>Pilih Model:</b> Masuk ke Dashboard, klik tombol <b>"⚙️ Atur Voting"</b> untuk memilih model AI mana saja yang akan digunakan sebagai juri.</li>
-            <li><b>Mulai Deteksi:</b> Klik tombol biru <b>"Mulai Deteksi"</b>. Tunggu proses pengambilan data (default 15 detik).</li>
-            <li><b>Lihat Hasil:</b> 
-                <ul>
-                    <li>Hasil utama muncul di kotak besar.</li>
-                    <li>Klik <b>"🔍 Lihat Detail Voting"</b> untuk melihat skor dari masing-masing model.</li>
-                </ul>
-            </li>
-        </ol>
+        <h3>1. Arsitektur Sistem</h3>
+        <p>Sistem ini dirancang untuk mendeteksi biomarker volatil pada daging (Sapi/Babi) menggunakan array sensor gas dan algoritma Machine Learning.</p>
+        <pre style="background-color: #F1F5F9; padding: 10px;">
+ [SENSOR ARRAY]  --->  [ARDUINO]  --->  [PYTHON APP]
+ (MQ2..MQ135)         (Serial)          (Feature Extraction)
+                                              ⬇
+                                        [AI MODELS]
+                                     (SVM, RF, Neural Net)
+                                              ⬇
+                                       [HASIL DETEKSI]
+        </pre>
 
-        <h3>2. Training Model Baru (Menu Training Center)</h3>
-        <p>Gunakan fitur ini jika Anda memiliki data sampel baru (Sapi/Babi) dalam format CSV.</p>
-        <ul>
-            <li>Siapkan folder <code>sample_data</code> yang berisi sub-folder sesuai label (misal: folder <code>Sapi</code> dan folder <code>Babi</code>).</li>
-            <li>Centang model yang ingin dilatih.</li>
-            <li>Klik <b>Mulai Training</b>.</li>
-        </ul>
-
-        <hr>
-        <h3 style="color: #B91C1C;">⚠ Catatan Khusus Performa Model</h3>
-        
-        <table border="1" cellspacing="0" cellpadding="10" style="border-collapse: collapse; width: 100%;">
-            <tr style="background-color: #F1F5F9;">
-                <th>Jenis Model</th>
-                <th>Karakteristik</th>
-                <th>Kebutuhan Hardware</th>
-            </tr>
-            <tr>
-                <td><b>SVM & KNN</b></td>
-                <td>Sangat Cepat, Ringan, Stabil.</td>
-                <td><span style="color:green;">Ringan</span> (Semua Laptop Bisa)</td>
-            </tr>
-            <tr>
-                <td><b>Random Forest</b></td>
-                <td>Akurasi Tinggi, Anti-Noise.</td>
-                <td><span style="color:orange;">Sedang</span> (RAM min 4GB)</td>
-            </tr>
-            <tr>
-                <td><b>XGBoost</b></td>
-                <td>Sangat Detail, Juara Kompetisi.</td>
-                <td><span style="color:orange;">Sedang</span></td>
-            </tr>
-            <tr>
-                <td><b>Deep Neural Net (DNN/MLP)</b></td>
-                <td><b>SANGAT BERAT</b>. Meniru otak manusia. Butuh waktu training lama.</td>
-                <td><span style="color:red;">Berat</span> (CPU i5/i7 Gen Baru, RAM min 8GB, SSD Wajib)</td>
-            </tr>
+        <h3>2. Spesifikasi Sensor (Hidung Elektronik)</h3>
+        <table border="1" cellspacing="0" cellpadding="5" style="border-collapse: collapse; width: 100%;">
+            <tr style="background-color: #E2E8F0;"><th>Sensor</th><th>Target Gas Utama</th><th>Relevansi Biomarker</th></tr>
+            <tr><td><b>MQ-2</b></td><td>Asap, LPG, Propana</td><td>Deteksi senyawa hidrokarbon umum.</td></tr>
+            <tr><td><b>MQ-3</b></td><td>Alkohol, Etanol</td><td>Deteksi hasil fermentasi/pembusukan awal.</td></tr>
+            <tr><td><b>MQ-4</b></td><td>Metana (CH4)</td><td>Gas rawa, indikator pembusukan lanjut.</td></tr>
+            <tr><td><b>MQ-6</b></td><td>LPG, Butana</td><td>Referensi silang hidrokarbon.</td></tr>
+            <tr><td><b>MQ-7</b></td><td>Karbon Monoksida (CO)</td><td>Indikator pembakaran tak sempurna.</td></tr>
+            <tr><td><b>MQ-8</b></td><td>Hidrogen (H2)</td><td>Gas ringan hasil reaksi kimia daging.</td></tr>
+            <tr><td><b>MQ-135</b></td><td>Amonia, Sulfida, Benzene</td><td><b>SANGAT PENTING:</b> Deteksi bau busuk/menyengat.</td></tr>
+            <tr><td><b>QCM</b></td><td>Massa Partikel (Hz)</td><td>Deteksi molekul organik berat yang menempel.</td></tr>
         </table>
 
-        <br>
-        <h3>3. Spesifikasi Minimum Sistem</h3>
+        <h3>3. Panduan Penggunaan (SOP)</h3>
+        <ol>
+            <li><b>Warming Up:</b> Nyalakan alat selama 5-10 menit agar heater sensor stabil (Nilai tidak drifting).</li>
+            <li><b>Sampling (Durasi Optimal):</b> 
+                <ul>
+                    <li><b>Deteksi Cepat:</b> 15 detik (Sudah cukup untuk Random Forest/KNN).</li>
+                    <li><b>Deteksi Akurat:</b> 30-60 detik (Disarankan untuk SVM dan Neural Network agar pola terlihat jelas).</li>
+                </ul>
+            </li>
+            <li><b>Purging:</b> Jauhkan sensor ke udara bersih selama 30 detik sebelum tes berikutnya.</li>
+        </ol>
+
+        <h3>4. Troubleshooting Model AI</h3>
         <ul>
-            <li><b>OS:</b> Windows 10/11 (64-bit)</li>
-            <li><b>Processor:</b> Intel Core i3 (Gen 8+) atau setara.</li>
-            <li><b>RAM:</b> 4 GB (Disarankan 8 GB jika menggunakan Neural Network).</li>
-            <li><b>Storage:</b> SSD (Agar proses load model cepat).</li>
+            <li><b>Hasil 50-60% (Ragu-ragu)?</b>: Kemungkinan data sampel mirip dengan data bersih. Coba latih ulang model dengan data baru.</li>
+            <li><b>Grafik Flat/Diam?</b>: Periksa koneksi kabel USB Arduino.</li>
         </ul>
         
-        <p><i>© 2025 E-Nose Research Team</i></p>
+        <p><i>© 2025 E-Nose Research Team - Versi 3.0 Ultimate</i></p>
         """
         
         self.browser.setHtml(html_content)

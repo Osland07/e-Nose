@@ -19,7 +19,6 @@ class TrainingWorker(QThread):
         self.data_path = data_path
 
     def run(self):
-        # Import di dalam thread agar GUI muncul duluan
         try:
             self.log_signal.emit("🚀 Memulai Training Center...")
             self.log_signal.emit(f"📂 Folder Data: {self.data_path}")
@@ -31,7 +30,7 @@ class TrainingWorker(QThread):
             import glob
             from sklearn.model_selection import train_test_split
             from sklearn.preprocessing import StandardScaler, LabelEncoder
-            from sklearn.metrics import accuracy_score
+            from sklearn.metrics import accuracy_score, precision_recall_fscore_support
             from ml.feature_extractor import extract_features
             
             # Import Model-Model
@@ -48,50 +47,53 @@ class TrainingWorker(QThread):
             all_features = []
             all_labels = []
             
-            # Scan subfolder di dalam data_path
             if not os.path.exists(self.data_path):
                 self.finished_signal.emit(False, f"Folder data tidak ditemukan: {self.data_path}")
                 return
 
             subfolders = [f.path for f in os.scandir(self.data_path) if f.is_dir()]
-            
             if not subfolders:
-                self.log_signal.emit("⚠ Tidak ada subfolder (kelas) ditemukan di dalam sample_data.")
-                self.log_signal.emit("ℹ Struktur yang benar:\n   sample_data/\n     ├── Kelas A/ (isi file csv)\n     └── Kelas B/ (isi file csv)")
+                self.log_signal.emit("⚠ Tidak ada subfolder (kelas) ditemukan.")
                 self.finished_signal.emit(False, "Struktur folder salah.")
                 return
 
-            self.log_signal.emit(f"🔎 Ditemukan {len(subfolders)} Kelas:")
+            self.log_signal.emit(f"🔎 Ditemukan {len(subfolders)} Kelas Label.")
+            
+            # Hitung total file dulu untuk progress bar
+            total_files = sum([len(glob.glob(os.path.join(f, "*.csv"))) for f in subfolders])
+            processed_files = 0
             
             for folder_path in subfolders:
-                label_name = os.path.basename(folder_path) # Nama folder jadi Label
+                label_name = os.path.basename(folder_path)
                 csv_files = glob.glob(os.path.join(folder_path, "*.csv"))
                 
                 self.log_signal.emit(f"   📂 {label_name}: {len(csv_files)} file")
                 
-                if not csv_files:
-                    continue
+                if not csv_files: continue
 
                 for fpath in csv_files:
                     try:
                         df = pd.read_csv(fpath, sep=';', decimal=',')
-                        # Cek validitas data (min 8 kolom)
-                        if df.shape[1] < 8:
-                            continue
+                        if df.shape[1] < 8: continue
                             
                         feats = extract_features(df)
                         all_features.append(feats)
-                        all_labels.append(label_name) # Gunakan nama folder sebagai label
+                        all_labels.append(label_name)
                     except: pass
+                    
+                    # Update Progress Bar (0% - 50% adalah fase Loading Data)
+                    processed_files += 1
+                    if total_files > 0:
+                        progress = int((processed_files / total_files) * 50) 
+                        self.progress_signal.emit(progress)
             
             if not all_features:
-                self.finished_signal.emit(False, "Tidak ada data valid (CSV) yang berhasil dibaca!")
+                self.finished_signal.emit(False, "Tidak ada data valid (CSV) ditemukan!")
                 return
             
-            self.log_signal.emit(f"\n✅ Total Data Latih: {len(all_features)} Sampel")
+            self.log_signal.emit(f"\n✅ Total Dataset: {len(all_features)} Sampel. Mulai Training...")
 
             # --- 2. PREPROCESSING ---
-            self.log_signal.emit("\n⚙️ Preprocessing Data...")
             X_df = pd.DataFrame(all_features).fillna(0)
             le = LabelEncoder()
             y = le.fit_transform(all_labels)
@@ -107,6 +109,7 @@ class TrainingWorker(QThread):
             if not os.path.exists(MODEL_DIR): os.makedirs(MODEL_DIR)
             
             total_models = len(self.selected_models)
+            
             for idx, model_key in enumerate(self.selected_models):
                 self.log_signal.emit(f"\n🔥 Melatih Model ({idx+1}/{total_models}): {model_key}...")
                 
@@ -124,21 +127,40 @@ class TrainingWorker(QThread):
                 elif model_key == "KNN": clf = KNeighborsClassifier(n_neighbors=5)
                 elif model_key == "Naive Bayes": clf = GaussianNB()
                 elif model_key == "Neural Net (MLP)": clf = MLPClassifier(hidden_layer_sizes=(100, 50), max_iter=500)
-                elif model_key == "Deep Neural Net (DNN)": clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=1000) # Simulasi DNN pakai MLP dalam
+                elif model_key == "Deep Neural Net (DNN)": clf = MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=1000) 
                 
-                if clf:
+                # FIX: Pengecekan yang benar untuk objek
+                if clf is not None:
                     clf.fit(X_train, y_train)
                     
-                    # Test Akurasi
-                    acc = accuracy_score(y_test, clf.predict(X_test)) * 100
-                    self.log_signal.emit(f"   ✅ Akurasi: {acc:.2f}%")
+                    # EVALUASI LENGKAP (F1-Score, dll)
+                    y_pred = clf.predict(X_test)
                     
-                    # Simpan
-                    payload = {'model': clf, 'scaler': scaler, 'columns': feature_columns}
+                    # Hitung Metrik
+                    acc = accuracy_score(y_test, y_pred) * 100
+                    # Average='macro' cocok untuk multiclass (Sapi, Babi, Udara)
+                    prec, rec, f1, _ = precision_recall_fscore_support(y_test, y_pred, average='macro', zero_division=0)
+                    
+                    # Tampilkan Rapor di Log Console
+                    self.log_signal.emit(f"   ✅ Akurasi   : {acc:.2f}%")
+                    self.log_signal.emit(f"   🎯 Precision : {prec:.2f}")
+                    self.log_signal.emit(f"   🔎 Recall    : {rec:.2f}")
+                    self.log_signal.emit(f"   🏆 F1-Score  : {f1:.2f}")
+                    
+                    # Simpan Model BESERTA Nama Kelasnya (Penting!)
+                    # Agar saat prediksi nanti tidak keluar angka 0/1 doang
+                    target_names = list(le.classes_)
+                    
+                    payload = {
+                        'model': clf, 
+                        'scaler': scaler, 
+                        'columns': feature_columns,
+                        'target_names': target_names 
+                    }
                     joblib.dump(payload, os.path.join(MODEL_DIR, name))
                 
-                # Update Progress
-                progress = int((idx + 1) / total_models * 100)
+                # Update Progress (50% - 100% adalah fase Training)
+                progress = 50 + int(((idx + 1) / total_models) * 50)
                 self.progress_signal.emit(progress)
 
             self.finished_signal.emit(True, "Semua model berhasil dilatih!")
@@ -146,7 +168,7 @@ class TrainingWorker(QThread):
         except Exception as e:
             import traceback
             error_msg = traceback.format_exc()
-            self.log_signal.emit(f"❌ TERJADI ERROR:\n{error_msg}") # Kirim sinyal, jangan akses GUI langsung
+            self.log_signal.emit(f"❌ TERJADI ERROR:\n{error_msg}")
             self.finished_signal.emit(False, str(e))
 
 
@@ -155,6 +177,7 @@ class TrainingPage(QWidget):
         super().__init__()
         self.data_path = os.path.join(os.getcwd(), "sample_data")
         self.worker = None
+        self.model_checkboxes = {}
         self._init_ui()
 
     def _init_ui(self):
@@ -181,7 +204,6 @@ class TrainingPage(QWidget):
         settings_layout.addLayout(path_layout)
         
         # Model Selection Grid
-        self.model_checkboxes = {}
         grid_frame = QFrame()
         grid_layout = QHBoxLayout(grid_frame)
         
@@ -218,7 +240,7 @@ class TrainingPage(QWidget):
         # Peringatan Berat
         self.lbl_warning = QLabel("⚠ PERHATIAN: Model Deep Learning butuh waktu training lama & CPU Tinggi!")
         self.lbl_warning.setStyleSheet("color: #EF4444; font-weight: bold; font-size: 12px; background-color: #FEF2F2; padding: 5px; border-radius: 4px;")
-        self.lbl_warning.hide() # Sembunyikan dulu
+        self.lbl_warning.hide() 
         settings_layout.addWidget(self.lbl_warning)
         
         layout.addWidget(settings_group)
@@ -247,12 +269,11 @@ class TrainingPage(QWidget):
     def add_check(self, name, layout, checked=False):
         chk = QCheckBox(name)
         chk.setChecked(checked)
-        chk.stateChanged.connect(self.check_heavy_models) # Cek setiap kali diklik
+        chk.stateChanged.connect(self.check_heavy_models)
         layout.addWidget(chk)
         self.model_checkboxes[name] = chk
 
     def check_heavy_models(self):
-        # Daftar model berat
         heavy_list = ["Deep Neural Net (DNN)", "XGBoost", "Gradient Boosting"]
         is_heavy = any(self.model_checkboxes[m].isChecked() for m in heavy_list if m in self.model_checkboxes)
         

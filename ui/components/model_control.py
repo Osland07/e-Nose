@@ -42,21 +42,31 @@ class VotingConfigDialog(QDialog):
         self.setWindowTitle("Konfigurasi Tim Voting (Ensemble)")
         self.setFixedSize(400, 500)
         
+        # FORCE STYLE: Putih Bersih
+        self.setStyleSheet("""
+            QDialog { background-color: white; }
+            QLabel { color: #334155; font-size: 12px; font-weight: bold; }
+            QCheckBox { color: #334155; font-size: 13px; padding: 5px; }
+            QCheckBox::indicator { width: 18px; height: 18px; }
+            QPushButton { background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; padding: 8px; border-radius: 5px; }
+            QPushButton:hover { background-color: #E2E8F0; }
+        """)
+        
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Pilih model yang akan ikut serta dalam voting:"))
         
         self.checks = {}
         
-        # Scroll Area jika modelnya banyak
-        from PyQt6.QtWidgets import QScrollArea
+        # Scroll Area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none; background-color: white;")
         content = QWidget()
+        content.setStyleSheet("background-color: white;")
         content_layout = QVBoxLayout(content)
         
         for model in available_models:
             chk = QCheckBox(model)
-            # Default checked jika list kosong (pertama kali) atau ada di list
             if not current_selection or model in current_selection:
                 chk.setChecked(True)
             content_layout.addWidget(chk)
@@ -77,8 +87,8 @@ class VotingConfigDialog(QDialog):
         btn_layout.addWidget(btn_none)
         layout.addLayout(btn_layout)
         
-        btn_save = QPushButton("Simpan Konfigurasi")
-        btn_save.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold; padding: 8px;")
+        btn_save = QPushButton("💾 Simpan Konfigurasi")
+        btn_save.setStyleSheet("background-color: #2563EB; color: white; font-weight: bold;")
         btn_save.clicked.connect(self.accept)
         layout.addWidget(btn_save)
 
@@ -100,9 +110,9 @@ class ModelControlWidget(QWidget):
         self.predictor = predictor
         self.thread = None
         self.worker = None
-        self.voting_whitelist = [] # Daftar model yang boleh ikut voting
+        self.voting_whitelist = [] 
 
-        # --- UI Setup (Minimalist Style) ---
+        # --- UI Setup ---
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(8)
@@ -112,7 +122,7 @@ class ModelControlWidget(QWidget):
         lbl_header.setStyleSheet("font-weight: bold; color: #475569; font-size: 12px;")
         layout.addWidget(lbl_header)
         
-        # Container Row (Dropdown + Upload)
+        # Container Row
         row_layout = QHBoxLayout()
         row_layout.setContentsMargins(0, 0, 0, 0)
         
@@ -121,6 +131,7 @@ class ModelControlWidget(QWidget):
         self.model_selector.setStyleSheet("""
             QComboBox { padding: 2px 10px; border: 1px solid #CBD5E1; border-radius: 6px; background-color: white; color: #334155; }
             QComboBox::drop-down { border: 0px; }
+            QComboBox:disabled { background-color: #F1F5F9; color: #94A3B8; }
         """)
         
         self.upload_button = QPushButton("📂")
@@ -162,8 +173,26 @@ class ModelControlWidget(QWidget):
         if dlg.exec():
             self.voting_whitelist = dlg.get_selected()
             count = len(self.voting_whitelist)
-            self.btn_voting_config.setText(f"⚙️ Tim Voting: {count} Model")
             
+            # Update UI Logic
+            if count > 1:
+                # MODE VOTING AKTIF
+                self.btn_voting_config.setText(f"⚙️ Voting Aktif: {count} Model")
+                self.btn_voting_config.setStyleSheet("background-color: #DBEAFE; color: #1E40AF; border: 1px solid #3B82F6; border-radius: 6px; padding: 5px; font-weight: bold;")
+                
+                self.model_selector.setEnabled(False) # Disable single selector
+                self.model_selector.setItemText(0, "--- MODE VOTING ---")
+                
+                self.model_status_label.setText("🚀 Mode Ensemble Aktif")
+                self.model_status_label.setStyleSheet("font-size: 10px; color: #2563EB; font-weight: bold;")
+            else:
+                # MODE SINGLE
+                self.btn_voting_config.setText("⚙️ Atur Tim Voting")
+                self.btn_voting_config.setStyleSheet("background-color: #F1F5F9; color: #334155; border: 1px solid #CBD5E1; border-radius: 6px; padding: 5px;")
+                
+                self.model_selector.setEnabled(True)
+                self.populate_model_selector() # Restore items
+
     def get_voting_whitelist(self):
         return self.voting_whitelist
 

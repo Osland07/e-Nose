@@ -13,14 +13,17 @@ from PyQt6.QtWidgets import (
     QStyle,
     QComboBox,
     QLineEdit,
-    QGroupBox
+    QGroupBox,
+    QStyle # Pindahkan ke sini
 )
+from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 from PyQt6.QtCore import Qt
 import math
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill
 from database.database import create_connection, get_record_by_id, delete_record_by_id, get_paginated_records, get_record_count, get_distinct_result_types, get_all_records_filtered
+from .detail_page import DetailPage # Import yang hilang
 
 class HistoryPage(QWidget):
     def __init__(self):
@@ -269,6 +272,7 @@ class HistoryPage(QWidget):
         button.setFixedSize(30, 30)
         
     def show_record_detail(self, record_id):
+        if not record_id: return
         try:
             detail_dialog = DetailPage(record_id, self)
             detail_dialog.exec()
