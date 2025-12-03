@@ -3,275 +3,191 @@ import os
 import numpy as np
 import pandas as pd
 from ml.feature_extractor import extract_features
-from sklearn.preprocessing import LabelEncoder
 
 class Predictor:
     MODEL_DIR = "model"
 
     def __init__(self):
-        self.model = None
-        self.scaler = None
-        self.le = LabelEncoder() # Jangan di-fit dulu
-        self.feature_columns = None
-        self.loaded_model_name = None
-
-    def load_model(self, model_filename):
-        """
-        Loads a trained model, its scaler, and feature columns from a .joblib file.
-        The file is expected to contain a dictionary with 'model', 'scaler', and 'columns' keys.
-        """
-        model_path = os.path.join(self.MODEL_DIR, model_filename)
-        if not os.path.exists(model_path):
-            print(f"Error: Model file not found at {model_path}")
-            self.model = None
-            self.scaler = None
-            self.feature_columns = None
-            self.loaded_model_name = None
-            return False
-        
-        try:
-            payload = joblib.load(model_path)
-            self.model = payload.get('model')
-            self.scaler = payload.get('scaler')
-            # The training script needs to save the column order
-            self.feature_columns = payload.get('columns') 
-            self.loaded_model_name = model_filename
-            
-            missing_keys = []
-            if self.model is None: missing_keys.append('model')
-            if self.scaler is None: missing_keys.append('scaler')
-            if self.feature_columns is None: missing_keys.append('columns')
-
-            if missing_keys:
-                print(f"Error: Model file '{model_filename}' is incomplete. Missing keys: {missing_keys}")
-                return False
-
-            print(f"Model '{model_filename}' loaded successfully.")
-            return True
-        except Exception as e:
-            print(f"Error loading model '{model_filename}': {e}")
-            self.model = None
-            self.scaler = None
-            self.feature_columns = None
-            self.loaded_model_name = None
-            return False
+        self.model = None # Compatibility for UI state checks
+        pass # Stateless, load on demand to save memory/avoid conflicts
 
     def load_model_from_payload(self, payload):
+        """Compatibility: Validates payload (UI requirement)"""
+        if not payload or 'model' not in payload: return False
+        self.model = payload.get('model') # Store for UI checks
+        return True
+
+    def load_model(self, model_filename):
+        """Compatibility: Loads model to check validity"""
+        payload, err = self._load_pipeline(model_filename)
+        if err: return False
+        return True
+
+    def _load_pipeline(self, model_filename):
         """
-        Loads a model from a pre-loaded payload dictionary.
+        Memuat Model, Scaler, dan Metadata dari file .joblib
         """
+        path = os.path.join(self.MODEL_DIR, model_filename)
+        if not os.path.exists(path):
+            return None, f"File {model_filename} tidak ditemukan."
+        
         try:
-            self.model = payload.get('model')
-            self.scaler = payload.get('scaler')
-            self.feature_columns = payload.get('columns')
+            payload = joblib.load(path)
+            # Validasi Payload
+            if not isinstance(payload, dict):
+                return None, "Format model usang/corrupt."
             
-            if self.model is None or self.scaler is None or self.feature_columns is None:
-                print("Error: Model payload is incomplete.")
-                return False
-            
-            return True
+            return payload, None
         except Exception as e:
-            print(f"Error loading model from payload: {e}")
-            self.model = None
-            self.scaler = None
-            self.feature_columns = None
-            return False
+            return None, str(e)
 
-    def predict_all_models(self, buffered_data, whitelist=None):
+    def predict_from_dataframe(self, df, whitelist=None):
         """
-        ENSEMBLE MODE: Memprediksi menggunakan model yang dipilih.
-        whitelist: List nama file model yang boleh ikut voting. Jika None/Kosong, pakai semua.
+        Fungsi Utama Prediksi dari DataFrame (Raw Data Sensor).
+        Mengembalikan: (Label Final, Confidence, Details List)
         """
-        # 1. Parse Data Sekali Saja
-        sensor_names = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM']
+        # 1. PREPROCESSING DATA
+        # Normalisasi Header (Hapus spasi, Uppercase)
+        df.columns = [str(c).upper().strip().replace(' ', '') for c in df.columns]
+        
+        # Ekstraksi Fitur Statistik
+        # Kita extract SEMUA kemungkinan fitur dulu (default 8 sensor)
+        # Nanti model akan memilih fitur yang dia butuhkan saja.
         try:
-            parsed_data = []
-            for row in buffered_data:
-                vals = list(map(float, row.split(',')))
-                if len(vals) >= 8: parsed_data.append(vals[:8])
-            
-            if not parsed_data: return "Error", 0.0, []
-            
-            df = pd.DataFrame(parsed_data, columns=sensor_names)
-            features = extract_features(df)
-        except:
-            return "Error Data", 0.0, []
+            features = extract_features(df) # Output: Dictionary
+            # Bungkus jadi DataFrame 1 baris
+            X_raw = pd.DataFrame([features])
+        except Exception as e:
+            return "Error Ekstraksi Fitur", 0.0, [{"name": "System", "label": "Error", "conf": 0.0}]
 
-        # 2. Loop Model (Filtered)
-        all_models = self.get_available_models()
-        
-        # Filter berdasarkan whitelist jika ada
-        if whitelist:
-            active_models = [m for m in all_models if m in whitelist]
-            if not active_models: active_models = all_models # Fallback jika whitelist salah
-        else:
-            active_models = all_models
+        # 2. SIAPKAN MODEL (Voting System)
+        available_models = self._get_model_list(whitelist)
+        if not available_models:
+            return "Belum Ada Model", 0.0, []
 
-        results = []
-        votes = {}
+        votes = []
         
-        for model_file in active_models:
-            # Load model sementara
-            full_path = os.path.join(self.MODEL_DIR, model_file)
+        # 3. PREDIKSI SETIAP MODEL
+        for model_name in available_models:
+            payload, err = self._load_pipeline(model_name)
+            if err: continue
+            
+            model = payload.get('model')
+            scaler = payload.get('scaler')
+            train_cols = payload.get('columns') # Urutan kolom saat training
+            
+            # A. Penyelarasan Fitur (CRITICAL STEP)
+            # Pastikan X_input punya kolom yang SAMA PERSIS dengan saat training
+            if train_cols:
+                # Reindex: Buang fitur berlebih, isi 0 untuk fitur yang kurang
+                X_ready = X_raw.reindex(columns=train_cols, fill_value=0)
+            else:
+                # Fallback untuk model lama
+                X_ready = X_raw.fillna(0)
+                
+            # B. Scaling
             try:
-                payload = joblib.load(full_path)
-                tmp_model = payload.get('model')
-                tmp_scaler = payload.get('scaler')
-                tmp_cols = payload.get('columns')
-                
-                # Preprocess
-                feat_df = pd.DataFrame([features])
-                if tmp_cols: feat_df = feat_df.reindex(columns=tmp_cols, fill_value=0)
-                else: feat_df = feat_df.fillna(0)
-                
-                X_scaled = tmp_scaler.transform(feat_df)
-                
-                # Predict
-                pred_idx = tmp_model.predict(X_scaled)[0]
-                proba = np.max(tmp_model.predict_proba(X_scaled)) * 100
-                
-                # Decode Label
-                # Cek apakah label berupa angka (0/1) dan terjemahkan
-                raw_label = pred_idx
-                if hasattr(tmp_model, 'classes_'):
-                    raw_label = tmp_model.classes_[pred_idx]
-                
-                # KAMUS PENERJEMAH (Fallback jika model hanya simpan 0/1)
-                # 0 biasanya Terdeteksi (huruf T lebih awal dari Tidak? Tidak, Te vs Ti. Te menang)
-                # Ups, Alphabetical: 
-                # 0 = "Terdeteksi Biomarker" (Te...)
-                # 1 = "Tidak Terdeteksi" (Ti...)
-                
-                label = str(raw_label)
-                if label == "0": 
-                    label = "Terdeteksi Biomarker"
-                elif label == "1": 
-                    label = "Tidak Terdeteksi"
+                if scaler:
+                    X_scaled = scaler.transform(X_ready)
+                else:
+                    X_scaled = X_ready
+            except:
+                continue # Skip model jika scaling gagal
 
-                # Simpan Hasil
-                model_name = model_file.replace(".joblib", "").replace("MODEL_", "").replace("REAL_", "")
-                results.append({
-                    "name": model_name,
-                    "label": label,
-                    "conf": proba
+            # C. Prediksi
+            try:
+                # Dapatkan Probability (jika support)
+                if hasattr(model, "predict_proba"):
+                    probs = model.predict_proba(X_scaled)[0] # [Prob_Kelas0, Prob_Kelas1]
+                    classes = model.classes_
+                    
+                    # Cari kelas dengan probabilitas tertinggi
+                    max_idx = np.argmax(probs)
+                    pred_label = str(classes[max_idx])
+                    confidence = probs[max_idx] * 100
+                    
+                else:
+                    # Fallback jika model tidak support probability (misal SVM linear)
+                    pred_idx = model.predict(X_scaled)[0]
+                    if hasattr(model, 'classes_'):
+                        pred_label = str(model.classes_[pred_idx])
+                    else:
+                        pred_label = str(pred_idx)
+                    confidence = 100.0 # Blind confidence
+
+                # Mapping Legacy (Jaga-jaga model lama yang outputnya 0/1)
+                if pred_label == "0": pred_label = "Terdeteksi (Legacy)"
+                if pred_label == "1": pred_label = "Tidak Terdeteksi (Legacy)"
+
+                # Simpan Vote
+                votes.append({
+                    "name": model_name.replace(".joblib", ""),
+                    "label": pred_label,
+                    "conf": confidence
                 })
                 
-                # Voting
-                votes[label] = votes.get(label, 0) + 1
-                
             except Exception as e:
-                print(f"Skip model {model_file}: {e}")
+                print(f"Error predict {model_name}: {e}")
 
-        if not results:
-            return "No Models", 0.0, []
+        if not votes:
+            return "Gagal Prediksi", 0.0, []
 
-        # 3. Hitung Pemenang Voting
-        if len(results) == 1:
-            # SINGLE MODEL MODE: Kembalikan confidence asli model tersebut
-            winner = results[0]['label']
-            confidence = results[0]['conf']
-        else:
-            # VOTING MODE: Kembalikan persentase kesepakatan juri
-            winner = max(votes, key=votes.get)
-            vote_count = votes[winner]
-            total_models = len(results)
-            confidence = (vote_count / total_models) * 100
+        # 4. HITUNG HASIL VOTING (Simple Majority)
+        from collections import Counter
         
-        return winner, confidence, results
+        # Kumpulkan semua label pemenang
+        labels = [v['label'] for v in votes]
+        counts = Counter(labels)
+        
+        # Pemenang terbanyak
+        winner_label, winner_count = counts.most_common(1)[0]
+        
+        # Hitung Confidence Rata-Rata untuk Pemenang
+        # (Hanya rata-rata dari model yang memilih pemenang tersebut)
+        winner_confs = [v['conf'] for v in votes if v['label'] == winner_label]
+        avg_conf = sum(winner_confs) / len(winner_confs)
+        
+        # Penyesuaian Confidence Global (Penalti jika voting tidak bulat)
+        # Jika 3 model pilih A, 2 model pilih B -> Confidence A turun sedikit
+        vote_agreement = winner_count / len(votes) # 0.0 - 1.0
+        
+        final_conf = avg_conf * vote_agreement
 
-    def predict(self, buffered_data):
-        """
-        Takes a buffer of raw data, extracts features, and makes a prediction.
-        'buffered_data' is a list of raw, comma-separated sensor strings.
-        """
-        # --- JALUR KHUSUS SIMULASI (BYPASS) ---
+        return winner_label, final_conf, votes
+
+    def predict_all_models(self, buffered_data, whitelist=None):
+        """Wrapper untuk data buffer (string csv)"""
+        # Parse CSV string ke DataFrame
         try:
-            first_row = buffered_data[0].strip()
-            if ',' not in first_row:
-                # Logic Bypass untuk data tunggal '0' atau '1'
-                val = float(first_row)
-                if val == 1.0: return "Terdeteksi Biomarker", 100.0
-                else: return "Tidak Terdeteksi", 100.0
-        except:
-            pass 
-        # --------------------------------------
-
-        if self.model is None or self.scaler is None:
-            return "Error: Model not loaded.", 0.0
-
-        try:
-            # 1. Convert buffer to DataFrame
-            # Kita asumsikan data masuk formatnya: MQ2...QCM, Temp, Hum, Pres (11 kolom)
-            # TAPI model cuma butuh 8 kolom pertama (MQ2...QCM)
-            
-            sensor_names = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM']
-            
             parsed_data = []
             for row in buffered_data:
+                if not row.strip(): continue
                 vals = list(map(float, row.split(',')))
-                # Ambil 8 kolom pertama saja untuk prediksi
-                if len(vals) >= 8:
-                    parsed_data.append(vals[:8])
-                else:
-                    # Kalau data korup/kurang, skip atau padding (kita skip aja biar aman)
-                    continue
+                parsed_data.append(vals)
             
-            if not parsed_data:
-                 return "Error: Data kosong/rusak.", 0.0
-
-            df = pd.DataFrame(parsed_data, columns=sensor_names)
-
-            # 2. Extract features (Statistik dari 8 sensor tadi)
-            features = extract_features(df)
+            if not parsed_data: return "Data Kosong", 0.0, []
             
-            # 3. Convert to DataFrame with correct column order for Model
-            # Pastikan urutan kolom fitur sama persis dengan saat training
-            if self.feature_columns:
-                # Buat DF kosong dengan kolom lengkap, lalu isi
-                features_df = pd.DataFrame([features])
-                # Reindex/urutkan kolom, isi 0 jika ada fitur yang hilang
-                features_df = features_df.reindex(columns=self.feature_columns, fill_value=0)
-            else:
-                features_df = pd.DataFrame([features]).fillna(0)
-
-            # 4. Scale features
-            scaled_features = self.scaler.transform(features_df)
+            # Asumsi 8 Sensor Standar jika dari Buffer Device
+            cols = ['MQ2', 'MQ3', 'MQ4', 'MQ6', 'MQ7', 'MQ8', 'MQ135', 'QCM']
+            # Potong/Pad
+            clean_data = []
+            for p in parsed_data:
+                if len(p) >= 8: clean_data.append(p[:8])
+                else: clean_data.append(p + [0]*(8-len(p)))
+                
+            df = pd.DataFrame(clean_data, columns=cols)
+            return self.predict_from_dataframe(df, whitelist)
             
-            # 5. Make prediction
-            prediction_idx = self.model.predict(scaled_features)
-            probability = self.model.predict_proba(scaled_features)
-            
-            # 6. Decode label
-            # Cek apakah label encoder punya kelas yang cukup
-            if hasattr(self.le, 'inverse_transform'):
-                try:
-                    result_label = self.le.inverse_transform(prediction_idx)[0]
-                except:
-                    # Fallback jika label tidak dikenal
-                    result_label = "Kelas " + str(prediction_idx[0])
-            else:
-                result_label = str(prediction_idx[0])
-
-            confidence = np.max(probability) * 100
-            
-            return result_label, confidence
-            
-        except ValueError as e:
-            print(f"Error processing data: {e}")
-            return "Error: Invalid data format.", 0.0
         except Exception as e:
-            print(f"Error during prediction: {e}")
-            import traceback
-            traceback.print_exc()
-            return f"Error: Prediction failed.", 0.0
+            return f"Error Buffer: {str(e)}", 0.0, []
 
-    @staticmethod
-    def get_available_models():
-        """Lists all .joblib files in the MODEL_DIR directory."""
-        if not os.path.exists(Predictor.MODEL_DIR):
-            os.makedirs(Predictor.MODEL_DIR)
-            return []
-        
-        models = [f for f in os.listdir(Predictor.MODEL_DIR) if f.endswith('.joblib')]
-        return models
+    def get_available_models(self):
+        """Public wrapper to list models"""
+        return self._get_model_list(None)
 
+    def _get_model_list(self, whitelist):
+        if not os.path.exists(self.MODEL_DIR): return []
+        files = [f for f in os.listdir(self.MODEL_DIR) if f.endswith('.joblib')]
+        if whitelist:
+            return [f for f in files if f in whitelist]
+        return files

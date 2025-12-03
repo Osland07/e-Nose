@@ -38,43 +38,55 @@ class MainWindow(QMainWindow):
         # --- 1. SIDEBAR ---
         sidebar_widget = QWidget()
         sidebar_widget.setFixedWidth(260)
-        sidebar_widget.setStyleSheet("background-color: #0F172A;") 
+        sidebar_widget.setStyleSheet("background-color: #1E3A8A;") # Navy Blue
         sidebar_layout = QVBoxLayout()
-        sidebar_layout.setContentsMargins(15, 30, 15, 20)
-        sidebar_layout.setSpacing(10)
+        sidebar_layout.setContentsMargins(0, 0, 0, 20) # Reset margin atas/bawah
+        sidebar_layout.setSpacing(5)
         sidebar_widget.setLayout(sidebar_layout)
         main_layout.addWidget(sidebar_widget)
 
-        # Logo
+        # Logo Area
+        logo_container = QWidget()
+        logo_container.setStyleSheet("background-color: #172554; border-bottom: 1px solid #1E40AF;") # Darker Navy
+        logo_layout = QVBoxLayout(logo_container)
+        logo_layout.setContentsMargins(20, 30, 20, 30)
+        
         logo_label = QLabel("E-NOSE\nDETECTOR")
         logo_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        logo_label.setStyleSheet("""
-            font-size: 24px; font-weight: 900; color: #38BDF8;
-            padding-bottom: 20px; border-bottom: 1px solid #1E293B;
-        """)
-        sidebar_layout.addWidget(logo_label)
+        logo_label.setStyleSheet("font-size: 24px; font-weight: 900; color: #FFFFFF; border: none;")
+        logo_layout.addWidget(logo_label)
+        
+        sidebar_layout.addWidget(logo_container)
+        sidebar_layout.addSpacing(10)
 
         # Navigation
         self.nav_list = QListWidget()
+        self.nav_list.setFocusPolicy(Qt.FocusPolicy.NoFocus) # Hilangkan garis putus-putus saat klik
         self.nav_list.setStyleSheet("""
             QListWidget {
-                background-color: transparent; border: none;
-                font-size: 14px; font-weight: 600; color: #94A3B8; outline: none;
+                background-color: transparent; border: none; outline: none;
+                font-size: 14px; font-weight: 600; color: #93C5FD; /* Light Blue Text */
             }
             QListWidget::item {
-                padding: 12px 15px; border-radius: 8px; margin-bottom: 5px;
+                padding: 15px 25px; 
+                border-left: 4px solid transparent;
+                margin-bottom: 2px;
             }
             QListWidget::item:hover {
-                background-color: #1E293B; color: white;
+                background-color: #172554; /* Darker Hover */
+                color: #FFFFFF;
             }
             QListWidget::item:selected {
-                background-color: #2563EB; color: white;
+                background-color: #2563EB; /* Bright Blue Selected */
+                color: #FFFFFF;
+                border-left: 4px solid #FFFFFF; /* White accent */
             }
         """)
         sidebar_layout.addWidget(self.nav_list)
 
         # Footer
         version_label = QLabel("v3.0 (Ultimate)\n© 2025 Lab Riset")
+        version_label.setStyleSheet("color: #60A5FA; font-size: 10px; padding-bottom: 10px;") # Lighter Blue
         version_label.setStyleSheet("color: #475569; font-size: 10px;")
         version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sidebar_layout.addStretch()

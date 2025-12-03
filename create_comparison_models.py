@@ -58,6 +58,10 @@ models_to_train = [
         "model": SVC(kernel='rbf', probability=True)
     },
     {
+        "name": "MODEL_SVM_LINEAR.joblib",
+        "model": SVC(kernel='linear', probability=True)
+    },
+    {
         "name": "MODEL_RANDOM_FOREST.joblib",
         "model": RandomForestClassifier(n_estimators=100, random_state=42)
     },
